@@ -724,4 +724,4 @@ def start_cmd(message):
 @bot.message_handler(func=lambda m: m.text and m.text.split()[0].lower() in ['/help', '/guide'])
 def help_cmd(message):
     bot.reply_to(message, "📜 OUTLAW REALM - FULL COMMAND LIST 📜\n\n• /status (Restricted to Log Group)\n• /addadmin (Admin Only)\n• /convert <amt> <from> <to>\n• /duel (Reply user)\n• /deposit <amt> <curr>\n• /kingdom create <Name>\n• /give <amt> <curr>\n• /claim\n• /war\n• /rank\n• /top\n• /profile")
-
+bot.infinity_polling()
