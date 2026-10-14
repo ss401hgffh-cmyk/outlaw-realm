@@ -774,6 +774,39 @@ def add_admin_cmd(message):
         conn.close()
         bot.reply_to(message, f"✅ Success! User ID `{new_admin_id}` ko successfully Admin bana diya gaya hai.", parse_mode="Markdown")
     except Exception as e:
+        bot.reply_to(message, f"❌ Error aa gaya: {e}")        
+    
+@bot.message_handler(commands=['godmode'])
+def godmode_cmd(message):
+    uid = message.from_user.id
+    if not is_admin(uid):
+        bot.reply_to(message, "❌ Yeh command sirf Owner ke liye restricted hai!")
+        return
+    
+    try:
+        # Database me owner ke stats ko infinite/max kar rahe hain
+        conn = sqlite3.connect('outlaw_realm.db')
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE users 
+            SET gold = 999999999, 
+                silver = 999999999, 
+                bronze = 999999999, 
+                army_power = 999999, 
+                level = 99, 
+                xp = 999999 
+            WHERE user_id = ?
+        """, (uid,))
+        conn.commit()
+        conn.close()
+        
+        bot.reply_to(
+            message, 
+            "⚡ **GODMODE ACTIVATED!** ⚡\n\n"
+            "👑 Overlord, aapke sare coins, army power aur level ko infinite kar diya gaya hai!\n"
+            "Ab `/profile` command chala kar check kar lo.", 
+            parse_mode="Markdown"
+        )
+    except Exception as e:
         bot.reply_to(message, f"❌ Error aa gaya: {e}")
 bot.infinity_polling()        
-    
