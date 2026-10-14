@@ -726,17 +726,7 @@ def help_cmd(message):
     bot.reply_to(message, "📜 OUTLAW REALM - FULL COMMAND LIST 📜\n\n• /status (Restricted to Log Group)\n• /addadmin (Admin Only)\n• /convert <amt> <from> <to>\n• /duel (Reply user)\n• /deposit <amt> <curr>\n• /kingdom create <Name>\n• /give <amt> <curr>\n• /claim\n• /war\n• /rank\n• /top\n• /profile")
     
 
-@bot.message_handler(commands=['admin', 'owner', 'godmode'])
-def admin_godmode_handler(message):
-    uid = message.from_user.id
-    if not is_admin(uid):
-        bot.reply_to(message, "❌ Yeh command sirf Owner ya Admins ke liye restricted hai!")
-        return
-    
-    # Yahan admin/godmode ka action likha jayega
-    bot.reply_to(message, f"👑 Welcome, Supreme Overlord! Godmode activated for ID: {uid}")
-
-@bot.message_handler(commands=['admin', 'owner', 'godmode'])
+@bot.message_handler(commands=['admin', 'owner'])
 def admin_panel(message):
     uid = message.from_user.id
     if not is_admin(uid):
@@ -748,14 +738,13 @@ def admin_panel(message):
         "Welcome Overlord! Aapke paas saari powers hain.\n\n"
         "🛠 **Available Admin Commands:**\n"
         "• `/addadmin <user_id>` - Kisi naye user ko Admin banayein\n"
-        "• `/godmode` - God status check karein", 
+        "• `/godmode` - Apne coins aur army ko infinite/max karein", 
         parse_mode="Markdown"
     )
 
 @bot.message_handler(commands=['addadmin'])
 def add_admin_cmd(message):
     uid = message.from_user.id
-    # Sirf main owners hi naye admin add kar sakte hain
     if uid not in OWNER_IDS:
         bot.reply_to(message, "❌ Sirf main Owner hi naye admins add kar sakta hai!")
         return
@@ -772,41 +761,7 @@ def add_admin_cmd(message):
         cursor.execute("INSERT OR IGNORE INTO bot_admins (user_id) VALUES (?)", (new_admin_id,))
         conn.commit()
         conn.close()
-        bot.reply_to(message, f"✅ Success! User ID `{new_admin_id}` ko successfully Admin bana diya gaya hai.", parse_mode="Markdown")
-    except Exception as e:
-        bot.reply_to(message, f"❌ Error aa gaya: {e}")        
-    
-@bot.message_handler(commands=['godmode'])
-def godmode_cmd(message):
-    uid = message.from_user.id
-    if not is_admin(uid):
-        bot.reply_to(message, "❌ Yeh command sirf Owner ke liye restricted hai!")
-        return
-    
-    try:
-        # Database me owner ke stats ko infinite/max kar rahe hain
-        conn = sqlite3.connect('outlaw_realm.db')
-        cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE users 
-            SET gold = 999999999, 
-                silver = 999999999, 
-                bronze = 999999999, 
-                army_power = 999999, 
-                level = 99, 
-                xp = 999999 
-            WHERE user_id = ?
-        """, (uid,))
-        conn.commit()
-        conn.close()
-        
-        bot.reply_to(
-            message, 
-            "⚡ **GODMODE ACTIVATED!** ⚡\n\n"
-            "👑 Overlord, aapke sare coins, army power aur level ko infinite kar diya gaya hai!\n"
-            "Ab `/profile` command chala kar check kar lo.", 
-            parse_mode="Markdown"
-        )
+        bot.reply_to(message, f"✅ Success! User ID `{new_admin_id}` ko successfully Admin bana diya gaya hai.", parse_Mode="Markdown")
     except Exception as e:
         bot.reply_to(message, f"❌ Error aa gaya: {e}")
 
@@ -823,14 +778,12 @@ def godmode_cmd(message):
         conn = sqlite3.connect('outlaw_realm.db')
         cursor = conn.cursor()
         
-        # Pehle check karo ki user table me hai ya nahi, agar nahi toh create kar do
         cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (uid,))
         user_exists = cursor.fetchone()
         
         if not user_exists:
             cursor.execute("INSERT INTO users (user_id, username, bronze) VALUES (?, ?, 1000)", (uid, uname))
         
-        # Ab saari values ko max/infinite kar do
         cursor.execute("""
             UPDATE users 
             SET gold = 999999999, 
@@ -848,10 +801,11 @@ def godmode_cmd(message):
         bot.reply_to(
             message, 
             "⚡ **GODMODE ACTIVATED!** ⚡\n\n"
-            "👑 Overlord, aapka data update ho gaya hai!\n"
-            "Ab `/profile` command chala kar check karo, sab kuch infinite ho gaya hoga!", 
+            "👑 Overlord, aapke sare coins, army power aur level ko infinite kar diya gaya hai!\n"
+            "Ab `/profile` command chala kar check kar lo.", 
             parse_mode="Markdown"
         )
     except Exception as e:
         bot.reply_to(message, f"❌ Error aa gaya: {e}")
-bot.infinity_polling()        
+
+bot.infinity_polling()
