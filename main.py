@@ -727,6 +727,31 @@ def help_cmd(message):
         parse_mode="Markdown"
     )
 
+# Database me title column add karne ke liye (agar pehle se nahi hai)
+try:
+    conn = sqlite3.connect('outlaw_realm.db')
+    cursor = conn.cursor()
+    cursor.execute("ALTER TABLE users ADD COLUMN title TEXT DEFAULT 'Member'")
+    conn.commit()
+    conn.close()
+except:
+    pass
+
+@bot.message_handler(commands=['help', 'guide'])
+def help_cmd(message):
+    bot.reply_to(message, 
+        "📜 **OUTLAW REALM - FULL COMMAND LIST** 📜\n\n"
+        "• `/start` - Apni profile banayein\n"
+        "• `/profile` - Apni stats aur wealth dekhein\n"
+        "• `/kingdom create <Name>` - Naya Kingdom banayein\n"
+        "• `/join <Kingdom Name>` - Kisi Kingdom ko join karein\n"
+        "• `/kingdom` - Apne Kingdom ka detailed status dekhein\n"
+        "• `/deposit <amount> gold/silver/bronze` - Treasury me daalein\n"
+        "• `/promote <user_id> <Title>` - Member ko Duke/Viscount/Baron banayein (Only King)\n"
+        "• `/admin` - Admin Panel (Admins Only)", 
+        parse_mode="Markdown"
+    )
+
 @bot.message_handler(commands=['join'])
 def join_kingdom_cmd(message):
     uid = message.from_user.id
@@ -741,7 +766,6 @@ def join_kingdom_cmd(message):
     conn = sqlite3.connect('outlaw_realm.db')
     cursor = conn.cursor()
     
-    # Check karo user pehle se kisi kingdom me hai ya nahi
     cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
     user_res = cursor.fetchone()
     if user_res and user_res[0]:
@@ -749,8 +773,7 @@ def join_kingdom_cmd(message):
         bot.reply_to(message, "❌ Aap pehle se hi ek Kingdom ke member hain!")
         return
         
-    # Check karo kingdom exist karta hai ya nahi
-    cursor.execute("SELECT rowid, name FROM kingdoms WHERE name LIKE ?", (kingdom_name,))
+    cursor.execute("SELECT kingdom_id, name FROM kingdoms WHERE name LIKE ?", (kingdom_name,))
     k_res = cursor.fetchone()
     
     if not k_res:
@@ -758,38 +781,69 @@ def join_kingdom_cmd(message):
         bot.reply_to(message, f"❌ '{kingdom_name}' naam ka koi Kingdom nahi mila! Sahi naam check karein.")
         return
         
-    k_rowid, k_actual_name = k_res
+    k_id, k_actual_name = k_res
     
-    # User ko kingdom assign karo aur default title 'Member' do
-    cursor.execute("UPDATE users SET kingdom_id = ?, title = 'Member' WHERE user_id = ?", (k_rowid, uid))
+    cursor.execute("UPDATE users SET kingdom_id = ?, title = 'Member' WHERE user_id = ?", (k_id, uid))
     conn.commit()
     conn.close()
     
     bot.reply_to(message, f"✅ Badhai ho! Aapne successfully **{k_actual_name}** Kingdom join kar liya hai!", parse_mode="Markdown")
 
 @bot.message_handler(commands=['kingdom'])
-def kingdom_status_cmd(message):
+def kingdom_handler(message):
     uid = message.from_user.id
+    uname = message.from_user.username or message.from_user.first_name or "Outlord"
+    parts = message.text.split(maxsplit=2)
+    
     conn = sqlite3.connect('outlaw_realm.db')
     cursor = conn.cursor()
     
     cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
-    user_res = cursor.fetchone()
+    u_res = cursor.fetchone()
     
-    if not user_res or not user_res[0]:
+    if not u_res:
+        cursor.execute("INSERT INTO users (user_id, username, bronze) VALUES (?, ?, 1000)", (uid, uname))
+        conn.commit()
+        user_kingdom_id = None
+    else:
+        user_kingdom_id = u_res[0]
+        
+    # Agar user kingdom banana chahta hai: /kingdom create <Name>
+    if len(parts) >= 3 and parts[1].lower() == 'create':
+        k_name = parts[2].strip()
+        
+        if user_kingdom_id:
+            conn.close()
+            bot.reply_to(message, "❌ Aap pehle se hi ek Kingdom ke member hain!")
+            return
+            
+        cursor.execute("SELECT kingdom_id FROM kingdoms WHERE name LIKE ?", (k_name,))
+        if cursor.fetchone():
+            conn.close()
+            bot.reply_to(message, f"❌ '{k_name}' naam ka Kingdom pehle se mojood hai! Dusra naam chunein.")
+            return
+            
+        cursor.execute("INSERT INTO kingdoms (name, owner_id, treasury_gold, treasury_silver, treasury_bronze) VALUES (?, ?, 0, 0, 0)", (k_name, uid))
+        kid = cursor.lastrowid
+        
+        cursor.execute("UPDATE users SET kingdom_id = ?, title = 'King' WHERE user_id = ?", (kid, uid))
+        conn.commit()
+        conn.close()
+        
+        bot.reply_to(message, f"🏰 **KINGDOM CREATED!** 🏰\n\nName: {k_name}\nRuler: @{uname}", parse_mode="Markdown")
+        return
+
+    # Agar sirf /kingdom likha hai toh Status Dashboard dikhao
+    if not user_kingdom_id:
         conn.close()
         bot.reply_to(message, "⚠️ Aap abhi kisi Kingdom ke member nahi hain!\nSahi tarika: `/kingdom create <Kingdom Name>` ya `/join <Kingdom Name>` likhein.", parse_mode="Markdown")
         return
     
-    k_id = user_res[0]
+    k_id = user_kingdom_id
     
-    cursor.execute("SELECT name, owner_id, treasury_gold, treasury_silver, treasury_bronze FROM kingdoms WHERE rowid = ? OR name = ?", (k_id, k_id))
+    cursor.execute("SELECT name, owner_id, treasury_gold, treasury_silver, treasury_bronze FROM kingdoms WHERE kingdom_id = ? OR rowid = ?", (k_id, k_id))
     k_data = cursor.fetchone()
     
-    if not k_data:
-        cursor.execute("SELECT name, owner_id, treasury_gold, treasury_silver, treasury_bronze FROM kingdoms WHERE kingdom_id = ?", (k_id,))
-        k_data = cursor.fetchone()
-        
     if not k_data:
         conn.close()
         bot.reply_to(message, "❌ Kingdom ki details nahi mili!")
@@ -861,7 +915,7 @@ def promote_member_cmd(message):
         return
         
     k_id = u_res[0]
-    cursor.execute("SELECT owner_id FROM kingdoms WHERE rowid = ? OR name = ?", (k_id, k_id))
+    cursor.execute("SELECT owner_id FROM kingdoms WHERE kingdom_id = ? OR rowid = ?", (k_id, k_id))
     k_info = cursor.fetchone()
     
     if not k_info or str(k_info[0]) != str(uid):
@@ -962,4 +1016,4 @@ def godmode_cmd(message):
         bot.reply_to(message, f"❌ Error aa gaya: {e}")
 
 bot.infinity_polling()
-        
+    
