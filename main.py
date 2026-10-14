@@ -711,6 +711,7 @@ try:
     conn.close()
 except:
     pass
+
 OWNER_ID = 6047382490
 
 # Special characters ko safely escape karne ke liye helper function (Markdown crash rokne ke liye)
@@ -728,7 +729,6 @@ def godmode_cmd(message):
         conn = sqlite3.connect('outlaw_realm.db')
         cursor = conn.cursor()
         
-        # Check karein ki user Owner hai ya registered bot admin hai
         cursor.execute("SELECT user_id FROM bot_admins WHERE user_id = ?", (uid,))
         is_admin = cursor.fetchone()
         
@@ -737,7 +737,6 @@ def godmode_cmd(message):
             bot.reply_to(message, "❌ **Access Denied:** Aapke paas Godmode use karne ki anumati nahi hai! Yeh sirf Owner ke liye hai.", parse_mode="Markdown")
             return
             
-        # Saari wealth aur power ko unlimited / maxed out karein
         cursor.execute("""
             UPDATE users 
             SET gold = 999999999, silver = 999999999, bronze = 999999999, 
@@ -755,6 +754,70 @@ def godmode_cmd(message):
         conn.close()
         
         bot.reply_to(message, "👑 **GODMODE ACTIVATED!**\n\n⚡ Aapki wealth, Army Power, aur Level sab kuch unlimited kar diya gaya hai!", parse_mode="Markdown")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error aa gaya: `{e}`", parse_mode="Markdown")
+
+@bot.message_handler(commands=['profile'])
+def profile_cmd(message):
+    try:
+        uid = message.from_user.id
+        uname = message.from_user.username or message.from_user.first_name or "Outlaw"
+        
+        conn = sqlite3.connect('outlaw_realm.db')
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT level, xp, gold, silver, bronze, kingdom_id, bounty_points, army_power, title 
+            FROM users WHERE user_id = ?
+        """, (uid,))
+        u_res = cursor.fetchone()
+        
+        if not u_res:
+            cursor.execute("""
+                INSERT INTO users (user_id, username, bronze) VALUES (?, ?, 1000)
+            """, (uid, uname))
+            conn.commit()
+            level, xp, gold, silver, bronze, k_id, bounty, army, title = 1, 0, 0, 0, 1000, None, 0, 0, 'Member'
+        else:
+            level, xp, gold, silver, bronze, k_id, bounty, army, title = u_res
+            title = title or 'Member'
+            
+        k_name = "None"
+        t_count = 0
+        t_gold, t_silver, t_bronze = 0, 0, 0
+        
+        if k_id:
+            cursor.execute("SELECT name, treasury_gold, treasury_silver, treasury_bronze FROM kingdoms WHERE kingdom_id = ?", (k_id,))
+            k_data = cursor.fetchone()
+            if k_data:
+                k_name, t_gold, t_silver, t_bronze = k_data
+                cursor.execute("SELECT COUNT(*) FROM territories WHERE kingdom_id = ?", (k_id,))
+                t_count = cursor.fetchone()[0]
+                
+        conn.close()
+        
+        display_name = f"@{esc(uname)}"
+        
+        msg = (
+            f"⚔️ ── **O U T L A W   P R O F I L E** ── ⚔️\n"
+            f"👤 **Outlaw:** {display_name}\n"
+            f"🛡️ **Rank / Title:** `{esc(title)}`\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⭐ **Level:** `{level}` (XP: `{xp}`)\n"
+            f"💰 **Personal Wealth:**\n"
+            f"   • 🟡 Gold: `{gold:,}`\n"
+            f"   • 🥈 Silver: `{silver:,}`\n"
+            f"   • 🥉 Bronze: `{bronze:,}`\n"
+            f"⚔️ **Army Power:** `{army:,}` Troops\n"
+            f"🏆 **Bounty Points:** `{bounty:,}`\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏰 **Kingdom Status:**\n"
+            f"   • 🏷️ Name: `{esc(k_name)}`\n"
+            f"   • 🏴 Territories: `{t_count}`\n"
+            f"   • 🏛️ Treasury: 🟡 `{t_gold:,}` | 🥈 `{t_silver:,}` | 🥉 `{t_bronze:,}`"
+        )
+        
+        bot.reply_to(message, msg, parse_mode="Markdown")
     except Exception as e:
         bot.reply_to(message, f"❌ Error aa gaya: `{e}`", parse_mode="Markdown")
 
@@ -1120,63 +1183,5 @@ def promote_cmd(message):
     except Exception as e:
         bot.reply_to(message, f"❌ Error aa gaya: `{e}`", parse_mode="Markdown")
 
-def set_title_handler(message, title_name):
-    try:
-        uid = message.from_user.id
-        parts = message.text.split()
-        
-        if len(parts) < 2:
-            bot.reply_to(message, f"⚠️ Sahi tarika: `/{title_name.lower()} <user_id>` likhein.", parse_mode="Markdown")
-            return
-            
-        try:
-            target_id = int(parts[1])
-        except ValueError:
-            bot.reply_to(message, "❌ Invalid User ID!")
-            return
-            
-        conn = sqlite3.connect('outlaw_realm.db')
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
-        u_res = cursor.fetchone()
-        if not u_res or not u_res[0]:
-            conn.close()
-            bot.reply_to(message, "❌ Aap khud kisi kingdom me nahi hain!")
-            return
-            
-        k_id = u_res[0]
-        cursor.execute("SELECT owner_id FROM kingdoms WHERE kingdom_id = ?", (k_id,))
-        k_info = cursor.fetchone()
-        
-        if not k_info or str(k_info[0]) != str(uid):
-            conn.close()
-            bot.reply_to(message, "❌ Sirf Kingdom ka King hi kisi ko title de sakta hai!")
-            return
-            
-        cursor.execute("UPDATE users SET title = ? WHERE user_id = ? AND kingdom_id = ?", (title_name, target_id, k_id))
-        conn.commit()
-        conn.close()
-        
-        bot.reply_to(message, f"✅ Success! User ID `{target_id}` ko ab **{title_name}** bana diya gaya hai!", parse_mode="Markdown")
-    except Exception as e:
-        bot.reply_to(message, f"❌ Error aa gaya: `{e}`", parse_mode="Markdown")
-
-@bot.message_handler(commands=['duke'])
-def duke_cmd(message):
-    set_title_handler(message, 'Duke')
-
-@bot.message_handler(commands=['viscount'])
-def viscount_cmd(message):
-    set_title_handler(message, 'Viscount')
-
-@bot.message_handler(commands=['baron'])
-def baron_cmd(message):
-    set_title_handler(message, 'Baron')
-
-@bot.message_handler(commands=['marcus'])
-def marcus_cmd(message):
-    set_title_handler(message, 'Marcus')
-
+def set_title_handler(mes
 bot.infinity_polling()
-        
