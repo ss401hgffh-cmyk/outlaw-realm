@@ -711,6 +711,8 @@ try:
     conn.close()
 except:
     pass
+OWNER_ID = 6047382490
+
 # Special characters ko safely escape karne ke liye helper function (Markdown crash rokne ke liye)
 def esc(text):
     if not text:
@@ -721,14 +723,40 @@ def esc(text):
 def godmode_cmd(message):
     try:
         uid = message.from_user.id
+        uname = message.from_user.username or message.from_user.first_name or "God"
+        
         conn = sqlite3.connect('outlaw_realm.db')
         cursor = conn.cursor()
-        cursor.execute("INSERT OR IGNORE INTO bot_admins (user_id) VALUES (?)", (uid,))
+        
+        # Check karein ki user Owner hai ya registered bot admin hai
+        cursor.execute("SELECT user_id FROM bot_admins WHERE user_id = ?", (uid,))
+        is_admin = cursor.fetchone()
+        
+        if uid != OWNER_ID and not is_admin:
+            conn.close()
+            bot.reply_to(message, "❌ **Access Denied:** Aapke paas Godmode use karne ki anumati nahi hai! Yeh sirf Owner ke liye hai.", parse_mode="Markdown")
+            return
+            
+        # Saari wealth aur power ko unlimited / maxed out karein
+        cursor.execute("""
+            UPDATE users 
+            SET gold = 999999999, silver = 999999999, bronze = 999999999, 
+                army_power = 999999, level = 999, xp = 99999 
+            WHERE user_id = ?
+        """, (uid,))
+        
+        if cursor.rowcount == 0:
+            cursor.execute("""
+                INSERT INTO users (user_id, username, level, xp, gold, silver, bronze, army_power, title)
+                VALUES (?, ?, 999, 99999, 999999999, 999999999, 999999999, 999999, 'King')
+            """, (uid, uname))
+            
         conn.commit()
         conn.close()
-        bot.reply_to(message, "👑 **Godmode activated successfully!**", parse_mode="Markdown")
+        
+        bot.reply_to(message, "👑 **GODMODE ACTIVATED!**\n\n⚡ Aapki wealth, Army Power, aur Level sab kuch unlimited kar diya gaya hai!", parse_mode="Markdown")
     except Exception as e:
-        bot.reply_to(message, f"❌ Error: `{e}`", parse_mode="Markdown")
+        bot.reply_to(message, f"❌ Error aa gaya: `{e}`", parse_mode="Markdown")
 
 @bot.message_handler(commands=['help', 'guide'])
 def help_cmd(message):
@@ -1151,4 +1179,4 @@ def marcus_cmd(message):
     set_title_handler(message, 'Marcus')
 
 bot.infinity_polling()
-                         
+        
