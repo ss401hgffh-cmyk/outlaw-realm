@@ -711,22 +711,6 @@ try:
     conn.close()
 except:
     pass
-
-@bot.message_handler(commands=['help', 'guide'])
-def help_cmd(message):
-    bot.reply_to(message, 
-        "📜 **OUTLAW REALM - FULL COMMAND LIST** 📜\n\n"
-        "• `/start` - Apni profile banayein\n"
-        "• `/profile` - Apni stats aur wealth dekhein\n"
-        "• `/kingdom create <Name>` - Naya Kingdom banayein\n"
-        "• `/join <Kingdom Name>` - Kisi Kingdom ko join karein\n"
-        "• `/kingdom` - Apne Kingdom ka detailed status dekhein\n"
-        "• `/deposit <amount> gold/silver/bronze` - Treasury me daalein\n"
-        "• `/promote <user_id> <Title>` - Member ko Duke/Viscount/Baron banayein (Only King)\n"
-        "• `/admin` - Admin Panel (Admins Only)", 
-        parse_mode="Markdown"
-    )
-
 @bot.message_handler(commands=['help', 'guide'])
 def help_cmd(message):
     bot.reply_to(message, 
@@ -736,7 +720,7 @@ def help_cmd(message):
         "• `/kingdom create <Name>` - Found your kingdom\n"
         "• `/join <Kingdom Name>` - Join a realm\n"
         "• `/kingdom` - Open Imperial Kingdom Dashboard\n"
-        "• `/deposit <amount> gold/silver/bronze` - Contribute to Treasury\n"
+        "• `/deposit <amount> gold/silver/bronze` - Add to Treasury\n"
         "• `/leave` - Abandon current kingdom (with warning)\n"
         "• `/promote <user_id> <Title>` - Grant noble rank (King Only)\n"
         "• `/transfer <user_id>` - Transfer crown (King Only)\n"
@@ -820,9 +804,7 @@ def deposit_cmd(message):
             bot.reply_to(message, f"❌ Aapke paas itna {ctype} nahi hai!", parse_mode="Markdown")
             return
             
-        contrib_val = amt * 10000 if ctype == 'gold' else (amt * 100 if ctype == 'silver' else amt)
-        
-        cursor.execute(f"UPDATE users SET {ctype} = {ctype} - ?, contribution = contribution + ? WHERE user_id = ?", (amt, contrib_val, uid))
+        cursor.execute(f"UPDATE users SET {ctype} = {ctype} - ? WHERE user_id = ?", (amt, uid))
         cursor.execute(f"UPDATE kingdoms SET treasury_{ctype} = treasury_{ctype} + ? WHERE kingdom_id = ?", (amt, k_id))
         
         conn.commit()
@@ -902,7 +884,7 @@ def kingdom_handler(message):
         cursor.execute("SELECT COUNT(*) FROM territories WHERE kingdom_id = ?", (k_id,))
         t_count = cursor.fetchone()[0]
         
-        cursor.execute("SELECT user_id, username, title, army_power, contribution FROM users WHERE kingdom_id = ?", (k_id,))
+        cursor.execute("SELECT user_id, username, title, army_power FROM users WHERE kingdom_id = ?", (k_id,))
         members = cursor.fetchall()
         
         conn.close()
@@ -910,7 +892,7 @@ def kingdom_handler(message):
         total_army = 0
         members_list = []
         for m in members:
-            m_id, m_name, m_title, m_army, m_contrib = m
+            m_id, m_name, m_title, m_army = m
             total_army += (m_army or 0)
             display_name = f"@{m_name}" if m_name else f"ID: {m_id}"
             title_tag = m_title if m_title else "Member"
@@ -922,7 +904,7 @@ def kingdom_handler(message):
             elif title_tag == "Viscount": badge = "🗡️"
             elif title_tag == "Baron": badge = "🏰"
             
-            members_list.append(f"  {badge} {display_name} ➔ **{title_tag}**\n     ╚ ⚔️ Army: `{m_army or 0}` | 🏛️ Contrib: `{m_contrib or 0}`\n")
+            members_list.append(f"  {badge} {display_name} ➔ **{title_tag}**\n     ╚ ⚔️ Army Force: `{m_army or 0}` Troops\n")
         
         members_str = "".join(members_list) if members_list else "  • Koi member nahi hai."
 
@@ -996,7 +978,7 @@ def leave_callback(call):
             
         conn = sqlite3.connect('outlaw_realm.db')
         cursor = conn.cursor()
-        cursor.execute("UPDATE users SET kingdom_id = NULL, title = 'Member', contribution = 0 WHERE user_id = ?", (uid,))
+        cursor.execute("UPDATE users SET kingdom_id = NULL, title = 'Member' WHERE user_id = ?", (uid,))
         conn.commit()
         conn.close()
         
@@ -1112,4 +1094,5 @@ def marcus_cmd(message):
     set_title_handler(message, 'Marcus')
 
 bot.infinity_polling()
-            
+    
+
