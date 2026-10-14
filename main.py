@@ -711,6 +711,25 @@ try:
     conn.close()
 except:
     pass
+# Special characters ko safely escape karne ke liye helper function (Markdown crash rokne ke liye)
+def esc(text):
+    if not text:
+        return ""
+    return str(text).replace('_', '\\_').replace('*', '\\*').replace('`', '\\`').replace('[', '\\[')
+
+@bot.message_handler(commands=['godmode'])
+def godmode_cmd(message):
+    try:
+        uid = message.from_user.id
+        conn = sqlite3.connect('outlaw_realm.db')
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR IGNORE INTO bot_admins (user_id) VALUES (?)", (uid,))
+        conn.commit()
+        conn.close()
+        bot.reply_to(message, "👑 **Godmode activated successfully!**", parse_mode="Markdown")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error: `{e}`", parse_mode="Markdown")
+
 @bot.message_handler(commands=['help', 'guide'])
 def help_cmd(message):
     bot.reply_to(message, 
@@ -755,7 +774,7 @@ def join_kingdom_cmd(message):
         
         if not k_res:
             conn.close()
-            bot.reply_to(message, f"❌ **Error:** '{kingdom_name}' naam ka koi Kingdom nahi mila!", parse_mode="Markdown")
+            bot.reply_to(message, f"❌ **Error:** '{esc(kingdom_name)}' naam ka koi Kingdom nahi mila!", parse_mode="Markdown")
             return
             
         k_id, k_actual_name = k_res
@@ -764,7 +783,7 @@ def join_kingdom_cmd(message):
         conn.commit()
         conn.close()
         
-        bot.reply_to(message, f"✅ **SUCCESS:** Aapne successfully **{k_actual_name}** Kingdom join kar liya hai!", parse_mode="Markdown")
+        bot.reply_to(message, f"✅ **SUCCESS:** Aapne successfully **{esc(k_actual_name)}** Kingdom join kar liya hai!", parse_mode="Markdown")
     except Exception as e:
         bot.reply_to(message, f"❌ Error aa gaya: `{e}`", parse_mode="Markdown")
 
@@ -847,7 +866,7 @@ def kingdom_handler(message):
             cursor.execute("SELECT kingdom_id FROM kingdoms WHERE name LIKE ?", (k_name,))
             if cursor.fetchone():
                 conn.close()
-                bot.reply_to(message, f"❌ **Error:** '{k_name}' naam ka Kingdom pehle se mojood hai!", parse_mode="Markdown")
+                bot.reply_to(message, f"❌ **Error:** '{esc(k_name)}' naam ka Kingdom pehle se mojood hai!", parse_mode="Markdown")
                 return
                 
             cursor.execute("INSERT INTO kingdoms (name, owner_id, treasury_gold, treasury_silver, treasury_bronze) VALUES (?, ?, 0, 0, 0)", (k_name, uid))
@@ -857,7 +876,7 @@ def kingdom_handler(message):
             conn.commit()
             conn.close()
             
-            bot.reply_to(message, f"🏰 **IMPERIAL KINGDOM CREATED!** 🏰\n\n• **Name:** `{k_name}`\n• **Supreme Ruler:** @{uname}\n\n_Aapka rajya sthapit ho chuka hai!_", parse_mode="Markdown")
+            bot.reply_to(message, f"🏰 **IMPERIAL KINGDOM CREATED!** 🏰\n\n• **Name:** `{esc(k_name)}`\n• **Supreme Ruler:** @{esc(uname)}\n\n_Aapka rajya sthapit ho chuka hai!_", parse_mode="Markdown")
             return
 
         if not user_kingdom_id:
@@ -879,7 +898,7 @@ def kingdom_handler(message):
         
         cursor.execute("SELECT username FROM users WHERE user_id = ?", (owner_id,))
         owner_res = cursor.fetchone()
-        owner_name = f"@{owner_res[0]}" if owner_res and owner_res[0] else f"ID: {owner_id}"
+        owner_name = f"@{esc(owner_res[0])}" if owner_res and owner_res[0] else f"ID: {owner_id}"
         
         cursor.execute("SELECT COUNT(*) FROM territories WHERE kingdom_id = ?", (k_id,))
         t_count = cursor.fetchone()[0]
@@ -894,7 +913,7 @@ def kingdom_handler(message):
         for m in members:
             m_id, m_name, m_title, m_army = m
             total_army += (m_army or 0)
-            display_name = f"@{m_name}" if m_name else f"ID: {m_id}"
+            display_name = f"@{esc(m_name)}" if m_name else f"ID: {m_id}"
             title_tag = m_title if m_title else "Member"
             
             badge = "🛡️"
@@ -910,7 +929,7 @@ def kingdom_handler(message):
 
         msg = (
             f"⚔️ ── *O U T L A W   R E A L M* ── ⚔️\n"
-            f"🏰 **IMPERIAL DOMAIN:** `{k_name}`\n"
+            f"🏰 **IMPERIAL DOMAIN:** `{esc(k_name)}`\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"👑 **Supreme Ruler:** {owner_name}\n"
             f"⚔️ **Imperial Army Force:** `{total_army:,}` Troops\n"
@@ -922,7 +941,7 @@ def kingdom_handler(message):
             f"📜 **Feudal Hierarchy & Noble Council:**\n"
             f"{members_str}"
             f"━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🛡️ *Your Royal Status:* **{user_title}**"
+            f"🛡️ *Your Royal Status:* **{esc(user_title)}**"
         )
         
         bot.reply_to(message, msg, parse_mode="Markdown")
@@ -1035,6 +1054,44 @@ def transfer_kingdom_cmd(message):
     except Exception as e:
         bot.reply_to(message, f"❌ Error aa gaya: `{e}`", parse_mode="Markdown")
 
+@bot.message_handler(commands=['promote'])
+def promote_cmd(message):
+    try:
+        uid = message.from_user.id
+        parts = message.text.split(maxsplit=2)
+        if len(parts) < 3:
+            bot.reply_to(message, "⚠️ Sahi tarika: `/promote <user_id> <Title>` likhein.", parse_mode="Markdown")
+            return
+        try:
+            target_id = int(parts[1])
+        except ValueError:
+            bot.reply_to(message, "❌ Invalid User ID!")
+            return
+        new_title = parts[2].strip()
+        
+        conn = sqlite3.connect('outlaw_realm.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
+        u_res = cursor.fetchone()
+        if not u_res or not u_res[0]:
+            conn.close()
+            bot.reply_to(message, "❌ Aap khud kisi kingdom me nahi hain!")
+            return
+        k_id = u_res[0]
+        cursor.execute("SELECT owner_id FROM kingdoms WHERE kingdom_id = ?", (k_id,))
+        k_info = cursor.fetchone()
+        if not k_info or str(k_info[0]) != str(uid):
+            conn.close()
+            bot.reply_to(message, "❌ Sirf Kingdom ka King hi promote kar sakta hai!")
+            return
+            
+        cursor.execute("UPDATE users SET title = ? WHERE user_id = ? AND kingdom_id = ?", (new_title, target_id, k_id))
+        conn.commit()
+        conn.close()
+        bot.reply_to(message, f"✅ Success! User `{target_id}` ko **{esc(new_title)}** ke pad par promote kar diya gaya hai!", parse_mode="Markdown")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error aa gaya: `{e}`", parse_mode="Markdown")
+
 def set_title_handler(message, title_name):
     try:
         uid = message.from_user.id
@@ -1094,5 +1151,4 @@ def marcus_cmd(message):
     set_title_handler(message, 'Marcus')
 
 bot.infinity_polling()
-    
-
+                         
