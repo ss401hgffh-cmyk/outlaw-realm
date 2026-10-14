@@ -1015,5 +1015,150 @@ def godmode_cmd(message):
     except Exception as e:
         bot.reply_to(message, f"❌ Error aa gaya: {e}")
 
-bot.infinity_polling()
+@bot.message_handler(commands=['leave'])
+def leave_kingdom_cmd(message):
+    uid = message.from_user.id
+    conn = sqlite3.connect('outlaw_realm.db')
+    cursor = conn.cursor()
     
+    cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
+    user_res = cursor.fetchone()
+    
+    if not user_res or not user_res[0]:
+        conn.close()
+        bot.reply_to(message, "⚠️ Aap abhi kisi Kingdom ke member nahi hain!")
+        return
+        
+    k_id = user_res[0]
+    cursor.execute("SELECT owner_id FROM kingdoms WHERE kingdom_id = ? OR rowid = ?", (k_id, k_id))
+    k_info = cursor.fetchone()
+    
+    if k_info and str(k_info[0]) == str(uid):
+        conn.close()
+        bot.reply_to(message, "❌ Aap King hain! Pehle `/transfer <user_id>` se crown transfer karein.")
+        return
+        
+    conn.close()
+    
+    # Warning confirmation buttons
+    markup = InlineKeyboardMarkup()
+    markup.add(
+        InlineKeyboardButton("✅ Haan, Chhodo", callback_data="confirm_leave"),
+        InlineKeyboardButton("❌ Nahi", callback_data="cancel_leave")
+    )
+    bot.reply_to(message, "⚠️ **WARNING:** Kya tum sach mein Kingdom chhodna chahte ho? Tumhara royal pad aur sabhi visheshadhikar chale jayenge!", reply_markup=markup, parse_mode="Markdown")
+
+@bot.callback_query_handler(func=lambda call: call.data in ["confirm_leave", "cancel_leave"])
+def leave_callback(call):
+    uid = call.from_user.id
+    if call.data == "cancel_leave":
+        bot.answer_callback_query(call.id, "Action cancelled!")
+        try:
+            bot.edit_message_text("❌ Kingdom chhodne ka faisla radd kar diya gaya hai.", call.message.chat.id, call.message.message_id)
+        except:
+            pass
+        return
+        
+    conn = sqlite3.connect('outlaw_realm.db')
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET kingdom_id = NULL, title = 'Member' WHERE user_id = ?", (uid,))
+    conn.commit()
+    conn.close()
+    
+    bot.answer_callback_query(call.id, "Left kingdom successfully!")
+    try:
+        bot.edit_message_text("✅ Aapne successfully Kingdom chhod diya hai! Ab aap apna royal pad kho chuke hain aur independent outlaw ban gaye hain.", call.message.chat.id, call.message.message_id)
+    except:
+        pass
+
+@bot.message_handler(commands=['transfer'])
+def transfer_kingdom_cmd(message):
+    uid = message.from_user.id
+    parts = message.text.split()
+    
+    if len(parts) < 2:
+        bot.reply_to(message, "⚠️ Sahi tarika: `/transfer <user_id>` likhein.", parse_mode="Markdown")
+        return
+        
+    try:
+        target_id = int(parts[1])
+    except ValueError:
+        bot.reply_to(message, "❌ Invalid User ID!")
+        return
+        
+    conn = sqlite3.connect('outlaw_realm.db')
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
+    u_res = cursor.fetchone()
+    if not u_res or not u_res[0]:
+        conn.close()
+        bot.reply_to(message, "❌ Aap kisi Kingdom ke member nahi hain!")
+        return
+        
+    k_id = u_res[0]
+    cursor.execute("UPDATE kingdoms SET owner_id = ? WHERE kingdom_id = ? OR rowid = ?", (target_id, k_id, k_id))
+    cursor.execute("UPDATE users SET title = 'Member' WHERE user_id = ?", (uid,))
+    cursor.execute("UPDATE users SET title = 'King' WHERE user_id = ?", (target_id,))
+    
+    conn.commit()
+    conn.close()
+    bot.reply_to(message, f"👑 Crown successfully direct transfer ho gaya! Naye King ki User ID `{target_id}` hai.", parse_mode="Markdown")
+
+# Helper function for direct title commands
+def set_title_handler(message, title_name):
+    uid = message.from_user.id
+    parts = message.text.split()
+    
+    if len(parts) < 2:
+        bot.reply_to(message, f"⚠️ Sahi tarika: `/{title_name.lower()} <user_id>` likhein.", parse_mode="Markdown")
+        return
+        
+    try:
+        target_id = int(parts[1])
+    except ValueError:
+        bot.reply_to(message, "❌ Invalid User ID!")
+        return
+        
+    conn = sqlite3.connect('outlaw_realm.db')
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
+    u_res = cursor.fetchone()
+    if not u_res or not u_res[0]:
+        conn.close()
+        bot.reply_to(message, "❌ Aap khud kisi kingdom me nahi hain!")
+        return
+        
+    k_id = u_res[0]
+    cursor.execute("SELECT owner_id FROM kingdoms WHERE kingdom_id = ? OR rowid = ?", (k_id, k_id))
+    k_info = cursor.fetchone()
+    
+    if not k_info or str(k_info[0]) != str(uid):
+        conn.close()
+        bot.reply_to(message, "❌ Sirf Kingdom ka King hi kisi ko title de sakta hai!")
+        return
+        
+    cursor.execute("UPDATE users SET title = ? WHERE user_id = ? AND kingdom_id = ?", (title_name, target_id, k_id))
+    conn.commit()
+    conn.close()
+    
+    bot.reply_to(message, f"✅ Success! User ID `{target_id}` ko ab **{title_name}** bana diya gaya hai!", parse_mode="Markdown")
+
+@bot.message_handler(commands=['duke'])
+def duke_cmd(message):
+    set_title_handler(message, 'Duke')
+
+@bot.message_handler(commands=['viscount'])
+def viscount_cmd(message):
+    set_title_handler(message, 'Viscount')
+
+@bot.message_handler(commands=['baron'])
+def baron_cmd(message):
+    set_title_handler(message, 'Baron')
+
+@bot.message_handler(commands=['marcus'])
+def marcus_cmd(message):
+    set_title_handler(message, 'Marcus')
+bot.infinity_polling()    
+
