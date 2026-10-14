@@ -197,30 +197,6 @@ def duel_cmd(message):
     conn.close()
     bot.reply_to(message, msg, parse_mode="Markdown")
 
-@bot.message_handler(func=lambda m: m.text and m.text.split()[0].lower() in ['/kingdom'])
-def kingdom_cmd(message):
-    parts = message.text.split()
-    uid, uname = message.from_user.id, message.from_user.username or message.from_user.first_name
-    u = get_or_create_user(uid, uname)
-
-    if len(parts) >= 3 and parts[1].lower() == 'create':
-        k_name = " ".join(parts[2:])
-        if u[7]:
-            bot.reply_to(message, "❌ Aap pehle se hi ek Kingdom ke member hain!")
-            return
-
-        conn = sqlite3.connect('outlaw_realm.db')
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO kingdoms (name, owner_id) VALUES (?, ?)", (k_name, uid))
-        kid = cursor.lastrowid
-        cursor.execute("UPDATE users SET kingdom_id = ? WHERE user_id = ?", (kid, uid))
-        conn.commit()
-        conn.close()
-
-        bot.reply_to(message, f"🏰 **KINGDOM CREATED!** 🏰\n\nName: `{k_name}`\nRuler: @{uname}", parse_mode="Markdown")
-    else:
-        bot.reply_to(message, "👑 **Kingdom Syntax:**\n`/kingdom create <Kingdom Name>`", parse_mode="Markdown")
-
 @bot.message_handler(func=lambda m: m.text and m.text.split()[0].lower() in ['/deposit'])
 def deposit_cmd(message):
     parts = message.text.split()
