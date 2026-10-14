@@ -735,6 +735,45 @@ def admin_godmode_handler(message):
     
     # Yahan admin/godmode ka action likha jayega
     bot.reply_to(message, f"👑 Welcome, Supreme Overlord! Godmode activated for ID: {uid}")
-bot.infinity_polling()
 
+@bot.message_handler(commands=['admin', 'owner', 'godmode'])
+def admin_panel(message):
+    uid = message.from_user.id
+    if not is_admin(uid):
+        bot.reply_to(message, "❌ Yeh command sirf Owner ya Admins ke liye restricted hai!")
+        return
+    
+    bot.reply_to(message, 
+        "👑 **OUTLAW REALM - SUPREME ADMIN PANEL** 👑\n\n"
+        "Welcome Overlord! Aapke paas saari powers hain.\n\n"
+        "🛠 **Available Admin Commands:**\n"
+        "• `/addadmin <user_id>` - Kisi naye user ko Admin banayein\n"
+        "• `/godmode` - God status check karein", 
+        parse_mode="Markdown"
+    )
+
+@bot.message_handler(commands=['addadmin'])
+def add_admin_cmd(message):
+    uid = message.from_user.id
+    # Sirf main owners hi naye admin add kar sakte hain
+    if uid not in OWNER_IDS:
+        bot.reply_to(message, "❌ Sirf main Owner hi naye admins add kar sakta hai!")
+        return
+    
+    parts = message.text.split()
+    if len(parts) < 2:
+        bot.reply_to(message, "⚠️ Sahi tarika: `/addadmin <user_id>` likhein.", parse_mode="Markdown")
+        return
+    
+    try:
+        new_admin_id = int(parts[1])
+        conn = sqlite3.connect('outlaw_realm.db')
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR IGNORE INTO bot_admins (user_id) VALUES (?)", (new_admin_id,))
+        conn.commit()
+        conn.close()
+        bot.reply_to(message, f"✅ Success! User ID `{new_admin_id}` ko successfully Admin bana diya gaya hai.", parse_mode="Markdown")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error aa gaya: {e}")
+bot.infinity_polling()        
     
