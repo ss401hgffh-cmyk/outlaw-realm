@@ -727,198 +727,6 @@ def help_cmd(message):
         parse_mode="Markdown"
     )
 
-# Database me title column add karne ke liye (agar pehle se nahi hai)
-try:
-    conn = sqlite3.connect('outlaw_realm.db')
-    cursor = conn.cursor()
-    cursor.execute("ALTER TABLE users ADD COLUMN title TEXT DEFAULT 'Member'")
-    conn.commit()
-    conn.close()
-except:
-    pass
-
-@bot.message_handler(commands=['help', 'guide'])
-def help_cmd(message):
-    bot.reply_to(message, 
-        "📜 **OUTLAW REALM - FULL COMMAND LIST** 📜\n\n"
-        "• `/start` - Apni profile banayein\n"
-        "• `/profile` - Apni stats aur wealth dekhein\n"
-        "• `/kingdom create <Name>` - Naya Kingdom banayein\n"
-        "• `/join <Kingdom Name>` - Kisi Kingdom ko join karein\n"
-        "• `/kingdom` - Apne Kingdom ka detailed status dekhein\n"
-        "• `/deposit <amount> gold/silver/bronze` - Treasury me daalein\n"
-        "• `/promote <user_id> <Title>` - Member ko Duke/Viscount/Baron banayein (Only King)\n"
-        "• `/admin` - Admin Panel (Admins Only)", 
-        parse_mode="Markdown"
-    )
-
-@bot.message_handler(commands=['join'])
-def join_kingdom_cmd(message):
-    uid = message.from_user.id
-    parts = message.text.split(maxsplit=1)
-    
-    if len(parts) < 2:
-        bot.reply_to(message, "⚠️ Sahi tarika: `/join <Kingdom Name>` likhein.", parse_mode="Markdown")
-        return
-        
-    kingdom_name = parts[1].strip()
-    
-    conn = sqlite3.connect('outlaw_realm.db')
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
-    user_res = cursor.fetchone()
-    if user_res and user_res[0]:
-        conn.close()
-        bot.reply_to(message, "❌ Aap pehle se hi ek Kingdom ke member hain!")
-        return
-        
-    cursor.execute("SELECT kingdom_id, name FROM kingdoms WHERE name LIKE ?", (kingdom_name,))
-    k_res = cursor.fetchone()
-    
-    if not k_res:
-        conn.close()
-        bot.reply_to(message, f"❌ '{kingdom_name}' naam ka koi Kingdom nahi mila! Sahi naam check karein.")
-        return
-        
-    k_id, k_actual_name = k_res
-    
-    cursor.execute("UPDATE users SET kingdom_id = ?, title = 'Member' WHERE user_id = ?", (k_id, uid))
-    conn.commit()
-    conn.close()
-    
-    bot.reply_to(message, f"✅ Badhai ho! Aapne successfully **{k_actual_name}** Kingdom join kar liya hai!", parse_mode="Markdown")
-
-@bot.message_handler(commands=['leave'])
-def leave_kingdom_cmd(message):
-    uid = message.from_user.id
-    conn = sqlite3.connect('outlaw_realm.db')
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
-    user_res = cursor.fetchone()
-    
-    if not user_res or not user_res[0]:
-        conn.close()
-        bot.reply_to(message, "⚠️ Aap abhi kisi Kingdom ke member nahi hain!")
-        return
-        
-    k_id = user_res[0]
-    cursor.execute("SELECT owner_id FROM kingdoms WHERE kingdom_id = ? OR rowid = ?", (k_id, k_id))
-    k_info = cursor.fetchone()
-    
-    if k_info and str(k_info[0]) == str(uid):
-        conn.close()
-        bot.reply_to(message, "❌ Aap King hain! Pehle `/transfer <user_id>` se crown transfer karein.")
-        return
-        
-    conn.close()
-    
-    # Warning confirmation buttons
-    markup = InlineKeyboardMarkup()
-    markup.add(
-        InlineKeyboardButton("✅ Haan, Chhodo", callback_data="confirm_leave"),
-        InlineKeyboardButton("❌ Nahi", callback_data="cancel_leave")
-    )
-    bot.reply_to(message, "⚠️ **WARNING:** Kya tum sach mein Kingdom chhodna chahte ho? Tumhara royal pad aur sabhi visheshadhikar chale jayenge!", reply_markup=markup, parse_mode="Markdown")
-
-@bot.callback_query_handler(func=lambda call: call.data in ["confirm_leave", "cancel_leave"])
-def leave_callback(call):
-    uid = call.from_user.id
-    if call.data == "cancel_leave":
-        bot.answer_callback_query(call.id, "Action cancelled!")
-        try:
-            bot.edit_message_text("❌ Kingdom chhodne ka faisla radd kar diya gaya hai.", call.message.chat.id, call.message.message_id)
-        except:
-            pass
-        return
-        
-    conn = sqlite3.connect('outlaw_realm.db')
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET kingdom_id = NULL, title = 'Member' WHERE user_id = ?", (uid,))
-    conn.commit()
-    conn.close()
-    
-    bot.answer_callback_query(call.id, "Left kingdom successfully!")
-    try:
-        bot.edit_message_text("✅ Aapne successfully Kingdom chhod diya hai! Ab aap apna royal pad kho chuke hain aur independent outlaw ban gaye hain.", call.message.chat.id, call.message.message_id)
-    except:
-        pass
-
-@bot.message_handler(commands=['transfer'])
-def transfer_kingdom_cmd(message):
-    uid = message.from_user.id
-    parts = message.text.split()
-    
-    if len(parts) < 2:
-        bot.reply_to(message, "⚠️ Sahi tarika: `/transfer <user_id>` likhein.", parse_mode="Markdown")
-        return
-        
-    try:
-        target_id = int(parts[1])
-    except ValueError:
-        bot.reply_to(message, "❌ Invalid User ID!")
-        return
-        
-    conn = sqlite3.connect('outlaw_realm.db')
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
-    u_res = cursor.fetchone()
-    if not u_res or not u_res[0]:
-        conn.close()
-        bot.reply_to(message, "❌ Aap kisi Kingdom ke member nahi hain!")
-        return
-        
-    k_id = u_res[0]
-    cursor.execute("UPDATE kingdoms SET owner_id = ? WHERE kingdom_id = ? OR rowid = ?", (target_id, k_id, k_id))
-    cursor.execute("UPDATE users SET title = 'Member' WHERE user_id = ?", (uid,))
-    cursor.execute("UPDATE users SET title = 'King' WHERE user_id = ?", (target_id,))
-    
-    conn.commit()
-    conn.close()
-    bot.reply_to(message, f"👑 Crown successfully direct transfer ho gaya! Naye King ki User ID `{target_id}` hai.", parse_mode="Markdown")
-
-# Helper function for direct title commands
-def set_title_handler(message, title_name):
-    uid = message.from_user.id
-    parts = message.text.split()
-    
-    if len(parts) < 2:
-        bot.reply_to(message, f"⚠️ Sahi tarika: `/{title_name.lower()} <user_id>` likhein.", parse_mode="Markdown")
-        return
-        
-    try:
-        target_id = int(parts[1])
-    except ValueError:
-        bot.reply_to(message, "❌ Invalid User ID!")
-        return
-        
-    conn = sqlite3.connect('outlaw_realm.db')
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
-    u_res = cursor.fetchone()
-    if not u_res or not u_res[0]:
-        conn.close()
-        bot.reply_to(message, "❌ Aap khud kisi kingdom me nahi hain!")
-        return
-        
-    k_id = u_res[0]
-    cursor.execute("SELECT owner_id FROM kingdoms WHERE kingdom_id = ? OR rowid = ?", (k_id, k_id))
-    k_info = cursor.fetchone()
-    
-    if not k_info or str(k_info[0]) != str(uid):
-        conn.close()
-        bot.reply_to(message, "❌ Sirf Kingdom ka King hi kisi ko title de sakta hai!")
-        return
-        
-    cursor.execute("UPDATE users SET title = ? WHERE user_id = ? AND kingdom_id = ?", (title_name, target_id, k_id))
-    conn.commit()
-    conn.close()
-    
-    bot.reply_to(message, f"✅ Success! User ID `{target_id}` ko ab **{title_name}** bana diya gaya hai!", parse_mode="Markdown")
-
 @bot.message_handler(commands=['help', 'guide'])
 def help_cmd(message):
     bot.reply_to(message, 
@@ -938,333 +746,354 @@ def help_cmd(message):
 
 @bot.message_handler(commands=['join'])
 def join_kingdom_cmd(message):
-    uid = message.from_user.id
-    parts = message.text.split(maxsplit=1)
-    
-    if len(parts) < 2:
-        bot.reply_to(message, "⚠️ Sahi tarika: `/join <Kingdom Name>` likhein.", parse_mode="Markdown")
-        return
+    try:
+        uid = message.from_user.id
+        parts = message.text.split(maxsplit=1)
         
-    kingdom_name = parts[1].strip()
-    
-    conn = sqlite3.connect('outlaw_realm.db')
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
-    user_res = cursor.fetchone()
-    if user_res and user_res[0]:
+        if len(parts) < 2:
+            bot.reply_to(message, "⚠️ Sahi tarika: `/join <Kingdom Name>` likhein.", parse_mode="Markdown")
+            return
+            
+        kingdom_name = parts[1].strip()
+        
+        conn = sqlite3.connect('outlaw_realm.db')
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
+        user_res = cursor.fetchone()
+        if user_res and user_res[0]:
+            conn.close()
+            bot.reply_to(message, "❌ **Error:** Aap pehle se hi ek Kingdom ke member hain!", parse_mode="Markdown")
+            return
+            
+        cursor.execute("SELECT kingdom_id, name FROM kingdoms WHERE name LIKE ?", (kingdom_name,))
+        k_res = cursor.fetchone()
+        
+        if not k_res:
+            conn.close()
+            bot.reply_to(message, f"❌ **Error:** '{kingdom_name}' naam ka koi Kingdom nahi mila!", parse_mode="Markdown")
+            return
+            
+        k_id, k_actual_name = k_res
+        
+        cursor.execute("UPDATE users SET kingdom_id = ?, title = 'Member' WHERE user_id = ?", (k_id, uid))
+        conn.commit()
         conn.close()
-        bot.reply_to(message, "❌ **Error:** Aap pehle se hi ek Kingdom ke member hain!", parse_mode="Markdown")
-        return
         
-    cursor.execute("SELECT kingdom_id, name FROM kingdoms WHERE name LIKE ?", (kingdom_name,))
-    k_res = cursor.fetchone()
-    
-    if not k_res:
-        conn.close()
-        bot.reply_to(message, f"❌ **Error:** '{kingdom_name}' naam ka koi Kingdom nahi mila!", parse_mode="Markdown")
-        return
-        
-    k_id, k_actual_name = k_res
-    
-    cursor.execute("UPDATE users SET kingdom_id = ?, title = 'Member' WHERE user_id = ?", (k_id, uid))
-    conn.commit()
-    conn.close()
-    
-    bot.reply_to(message, f"✅ **SUCCESS:** Aapne successfully **{k_actual_name}** Kingdom join kar liya hai!", parse_mode="Markdown")
+        bot.reply_to(message, f"✅ **SUCCESS:** Aapne successfully **{k_actual_name}** Kingdom join kar liya hai!", parse_mode="Markdown")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error aa gaya: `{e}`", parse_mode="Markdown")
 
 @bot.message_handler(commands=['deposit'])
 def deposit_cmd(message):
-    uid = message.from_user.id
-    parts = message.text.split()
-    
-    if len(parts) < 3 or not parts[1].isdigit():
-        bot.reply_to(message, "⚠️ Sahi tarika: `/deposit <amount> gold/silver/bronze`", parse_mode="Markdown")
-        return
+    try:
+        uid = message.from_user.id
+        parts = message.text.split()
         
-    amt = int(parts[1])
-    ctype = parts[2].lower()
-    
-    if amt <= 0 or ctype not in ['gold', 'silver', 'bronze']:
-        bot.reply_to(message, "❌ Invalid amount ya currency! (gold/silver/bronze chunein)", parse_mode="Markdown")
-        return
+        if len(parts) < 3 or not parts[1].isdigit():
+            bot.reply_to(message, "⚠️ Sahi tarika: `/deposit <amount> gold/silver/bronze`", parse_mode="Markdown")
+            return
+            
+        amt = int(parts[1])
+        ctype = parts[2].lower()
         
-    conn = sqlite3.connect('outlaw_realm.db')
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT kingdom_id, gold, silver, bronze FROM users WHERE user_id = ?", (uid,))
-    u_res = cursor.fetchone()
-    
-    if not u_res or not u_res[0]:
+        if amt <= 0 or ctype not in ['gold', 'silver', 'bronze']:
+            bot.reply_to(message, "❌ Invalid amount ya currency! (gold/silver/bronze chunein)", parse_mode="Markdown")
+            return
+            
+        conn = sqlite3.connect('outlaw_realm.db')
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT kingdom_id, gold, silver, bronze FROM users WHERE user_id = ?", (uid,))
+        u_res = cursor.fetchone()
+        
+        if not u_res or not u_res[0]:
+            conn.close()
+            bot.reply_to(message, "❌ Aap kisi Kingdom ke member nahi hain! Pehle join karein.", parse_mode="Markdown")
+            return
+            
+        k_id, u_gold, u_silver, u_bronze = u_res
+        
+        curr_bal = u_gold if ctype == 'gold' else (u_silver if ctype == 'silver' else u_bronze)
+        if curr_bal < amt:
+            conn.close()
+            bot.reply_to(message, f"❌ Aapke paas itna {ctype} nahi hai!", parse_mode="Markdown")
+            return
+            
+        contrib_val = amt * 10000 if ctype == 'gold' else (amt * 100 if ctype == 'silver' else amt)
+        
+        cursor.execute(f"UPDATE users SET {ctype} = {ctype} - ?, contribution = contribution + ? WHERE user_id = ?", (amt, contrib_val, uid))
+        cursor.execute(f"UPDATE kingdoms SET treasury_{ctype} = treasury_{ctype} + ? WHERE kingdom_id = ?", (amt, k_id))
+        
+        conn.commit()
         conn.close()
-        bot.reply_to(message, "❌ Aap kisi Kingdom ke member nahi hain! Pehle join karein.", parse_mode="Markdown")
-        return
         
-    k_id, u_gold, u_silver, u_bronze = u_res
-    
-    curr_bal = u_gold if ctype == 'gold' else (u_silver if ctype == 'silver' else u_bronze)
-    if curr_bal < amt:
-        conn.close()
-        bot.reply_to(message, f"❌ Aapke paas itna {ctype} nahi hai!", parse_mode="Markdown")
-        return
-        
-    contrib_val = amt * 10000 if ctype == 'gold' else (amt * 100 if ctype == 'silver' else amt)
-    
-    cursor.execute(f"UPDATE users SET {ctype} = {ctype} - ?, contribution = contribution + ? WHERE user_id = ?", (amt, contrib_val, uid))
-    cursor.execute(f"UPDATE kingdoms SET treasury_{ctype} = treasury_{ctype} + ? WHERE kingdom_id = ?", (amt, k_id))
-    
-    conn.commit()
-    conn.close()
-    
-    bot.reply_to(message, f"✅ **TREASURY DEPOSIT:** {amt:,} {ctype.capitalize()} successfully rajya ke khazane me jama kar diya gaya hai! 🙏", parse_mode="Markdown")
+        bot.reply_to(message, f"✅ **TREASURY DEPOSIT:** {amt:,} {ctype.capitalize()} successfully rajya ke khazane me jama kar diya gaya hai! 🙏", parse_mode="Markdown")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error aa gaya: `{e}`", parse_mode="Markdown")
 
 @bot.message_handler(commands=['kingdom'])
 def kingdom_handler(message):
-    uid = message.from_user.id
-    uname = message.from_user.username or message.from_user.first_name or "Outlord"
-    parts = message.text.split(maxsplit=2)
-    
-    conn = sqlite3.connect('outlaw_realm.db')
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT kingdom_id, title FROM users WHERE user_id = ?", (uid,))
-    u_res = cursor.fetchone()
-    
-    if not u_res:
-        cursor.execute("INSERT INTO users (user_id, username, bronze) VALUES (?, ?, 1000)", (uid, uname))
-        conn.commit()
-        user_kingdom_id = None
-        user_title = "Member"
-    else:
-        user_kingdom_id = u_res[0]
-        user_title = u_res[1] or "Member"
+    try:
+        uid = message.from_user.id
+        uname = message.from_user.username or message.from_user.first_name or "Outlord"
+        parts = message.text.split(maxsplit=2)
         
-    if len(parts) >= 3 and parts[1].lower() == 'create':
-        k_name = parts[2].strip()
+        conn = sqlite3.connect('outlaw_realm.db')
+        cursor = conn.cursor()
         
-        if user_kingdom_id:
+        cursor.execute("SELECT kingdom_id, title FROM users WHERE user_id = ?", (uid,))
+        u_res = cursor.fetchone()
+        
+        if not u_res:
+            cursor.execute("INSERT INTO users (user_id, username, bronze) VALUES (?, ?, 1000)", (uid, uname))
+            conn.commit()
+            user_kingdom_id = None
+            user_title = "Member"
+        else:
+            user_kingdom_id = u_res[0]
+            user_title = u_res[1] or "Member"
+            
+        if len(parts) >= 3 and parts[1].lower() == 'create':
+            k_name = parts[2].strip()
+            
+            if user_kingdom_id:
+                conn.close()
+                bot.reply_to(message, "❌ **Error:** Aap pehle se hi kisi Empire ke member hain!", parse_mode="Markdown")
+                return
+                
+            cursor.execute("SELECT kingdom_id FROM kingdoms WHERE name LIKE ?", (k_name,))
+            if cursor.fetchone():
+                conn.close()
+                bot.reply_to(message, f"❌ **Error:** '{k_name}' naam ka Kingdom pehle se mojood hai!", parse_mode="Markdown")
+                return
+                
+            cursor.execute("INSERT INTO kingdoms (name, owner_id, treasury_gold, treasury_silver, treasury_bronze) VALUES (?, ?, 0, 0, 0)", (k_name, uid))
+            kid = cursor.lastrowid
+            
+            cursor.execute("UPDATE users SET kingdom_id = ?, title = 'King' WHERE user_id = ?", (kid, uid))
+            conn.commit()
             conn.close()
-            bot.reply_to(message, "❌ **Error:** Aap pehle se hi kisi Empire ke member hain!", parse_mode="Markdown")
+            
+            bot.reply_to(message, f"🏰 **IMPERIAL KINGDOM CREATED!** 🏰\n\n• **Name:** `{k_name}`\n• **Supreme Ruler:** @{uname}\n\n_Aapka rajya sthapit ho chuka hai!_", parse_mode="Markdown")
+            return
+
+        if not user_kingdom_id:
+            conn.close()
+            bot.reply_to(message, "⚠️ **Notice:** Aap abhi kisi Kingdom ke member nahi hain!\n\n• Naya banayein: `/kingdom create <Name>`\n• Join karein: `/join <Name>`", parse_mode="Markdown")
+            return
+        
+        k_id = user_kingdom_id
+        
+        cursor.execute("SELECT name, owner_id, treasury_gold, treasury_silver, treasury_bronze FROM kingdoms WHERE kingdom_id = ?", (k_id,))
+        k_data = cursor.fetchone()
+        
+        if not k_data:
+            conn.close()
+            bot.reply_to(message, "❌ **Error:** Kingdom ki details nahi mili!", parse_mode="Markdown")
             return
             
-        cursor.execute("SELECT kingdom_id FROM kingdoms WHERE name LIKE ?", (k_name,))
-        if cursor.fetchone():
-            conn.close()
-            bot.reply_to(message, f"❌ **Error:** '{k_name}' naam ka Kingdom pehle se mojood hai!", parse_mode="Markdown")
-            return
+        k_name, owner_id, t_gold, t_silver, t_bronze = k_data
+        
+        cursor.execute("SELECT username FROM users WHERE user_id = ?", (owner_id,))
+        owner_res = cursor.fetchone()
+        owner_name = f"@{owner_res[0]}" if owner_res and owner_res[0] else f"ID: {owner_id}"
+        
+        cursor.execute("SELECT COUNT(*) FROM territories WHERE kingdom_id = ?", (k_id,))
+        t_count = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT user_id, username, title, army_power, contribution FROM users WHERE kingdom_id = ?", (k_id,))
+        members = cursor.fetchall()
+        
+        conn.close()
+        
+        total_army = 0
+        members_list = []
+        for m in members:
+            m_id, m_name, m_title, m_army, m_contrib = m
+            total_army += (m_army or 0)
+            display_name = f"@{m_name}" if m_name else f"ID: {m_id}"
+            title_tag = m_title if m_title else "Member"
             
-        cursor.execute("INSERT INTO kingdoms (name, owner_id, treasury_gold, treasury_silver, treasury_bronze) VALUES (?, ?, 0, 0, 0)", (k_name, uid))
-        kid = cursor.lastrowid
+            badge = "🛡️"
+            if title_tag == "King": badge = "👑"
+            elif title_tag == "Duke": badge = "⚜️"
+            elif title_tag in ["Marquess", "Marcus"]: badge = "⚔️"
+            elif title_tag == "Viscount": badge = "🗡️"
+            elif title_tag == "Baron": badge = "🏰"
+            
+            members_list.append(f"  {badge} {display_name} ➔ **{title_tag}**\n     ╚ ⚔️ Army: `{m_army or 0}` | 🏛️ Contrib: `{m_contrib or 0}`\n")
         
-        cursor.execute("UPDATE users SET kingdom_id = ?, title = 'King' WHERE user_id = ?", (kid, uid))
-        conn.commit()
-        conn.close()
-        
-        bot.reply_to(message, f"🏰 **IMPERIAL KINGDOM CREATED!** 🏰\n\n• **Name:** `{k_name}`\n• **Supreme Ruler:** @{uname}\n\n_Aapka rajya sthapit ho chuka hai!_", parse_mode="Markdown")
-        return
+        members_str = "".join(members_list) if members_list else "  • Koi member nahi hai."
 
-    if not user_kingdom_id:
-        conn.close()
-        bot.reply_to(message, "⚠️ **Notice:** Aap abhi kisi Kingdom ke member nahi hain!\n\n• Naya banayein: `/kingdom create <Name>`\n• Join karein: `/join <Name>`", parse_mode="Markdown")
-        return
-    
-    k_id = user_kingdom_id
-    
-    cursor.execute("SELECT name, owner_id, treasury_gold, treasury_silver, treasury_bronze FROM kingdoms WHERE kingdom_id = ?", (k_id,))
-    k_data = cursor.fetchone()
-    
-    if not k_data:
-        conn.close()
-        bot.reply_to(message, "❌ **Error:** Kingdom ki details nahi mili!", parse_mode="Markdown")
-        return
+        msg = (
+            f"⚔️ ── *O U T L A W   R E A L M* ── ⚔️\n"
+            f"🏰 **IMPERIAL DOMAIN:** `{k_name}`\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"👑 **Supreme Ruler:** {owner_name}\n"
+            f"⚔️ **Imperial Army Force:** `{total_army:,}` Troops\n"
+            f"🏴 **Conquered Territories:** `{t_count}`\n\n"
+            f"💰 **Royal Treasury Vault:**\n"
+            f"  • 🟡 Gold: `{t_gold or 0:,}`\n"
+            f"  • 🥈 Silver: `{t_silver or 0:,}`\n"
+            f"  • 🥉 Bronze: `{t_bronze or 0:,}`\n\n"
+            f"📜 **Feudal Hierarchy & Noble Council:**\n"
+            f"{members_str}"
+            f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🛡️ *Your Royal Status:* **{user_title}**"
+        )
         
-    k_name, owner_id, t_gold, t_silver, t_bronze = k_data
-    
-    cursor.execute("SELECT username FROM users WHERE user_id = ?", (owner_id,))
-    owner_res = cursor.fetchone()
-    owner_name = f"@{owner_res[0]}" if owner_res and owner_res[0] else f"ID: {owner_id}"
-    
-    cursor.execute("SELECT COUNT(*) FROM territories WHERE kingdom_id = ?", (k_id,))
-    t_count = cursor.fetchone()[0]
-    
-    cursor.execute("SELECT user_id, username, title, army_power, contribution FROM users WHERE kingdom_id = ?", (k_id,))
-    members = cursor.fetchall()
-    
-    conn.close()
-    
-    total_army = 0
-    members_list = []
-    for m in members:
-        m_id, m_name, m_title, m_army, m_contrib = m
-        total_army += (m_army or 0)
-        display_name = f"@{m_name}" if m_name else f"ID: {m_id}"
-        title_tag = m_title if m_title else "Member"
-        
-        badge = "🛡️"
-        if title_tag == "King": badge = "👑"
-        elif title_tag == "Duke": badge = "⚜️"
-        elif title_tag in ["Marquess", "Marcus"]: badge = "⚔️"
-        elif title_tag == "Viscount": badge = "🗡️"
-        elif title_tag == "Baron": badge = "🏰"
-        
-        members_list.append(f"  {badge} {display_name} ➔ **{title_tag}**\n     ╚ ⚔️ Army: `{m_army or 0}` | 🏛️ Contrib: `{m_contrib or 0}`\n")
-    
-    members_str = "".join(members_list) if members_list else "  • Koi member nahi hai."
-
-    msg = (
-        f"⚔️ ── *O U T L A W   R E A L M* ── ⚔️\n"
-        f"🏰 **IMPERIAL DOMAIN:** `{k_name}`\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"👑 **Supreme Ruler:** {owner_name}\n"
-        f"⚔️ **Imperial Army Force:** `{total_army:,}` Troops\n"
-        f"🏴 **Conquered Territories:** `{t_count}`\n\n"
-        f"💰 **Royal Treasury Vault:**\n"
-        f"  • 🟡 Gold: `{t_gold or 0:,}`\n"
-        f"  • 🥈 Silver: `{t_silver or 0:,}`\n"
-        f"  • 🥉 Bronze: `{t_bronze or 0:,}`\n\n"
-        f"📜 **Feudal Hierarchy & Noble Council:**\n"
-        f"{members_str}"
-        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🛡️ *Your Royal Status:* **{user_title}**"
-    )
-    
-    bot.reply_to(message, msg, parse_mode="Markdown")
+        bot.reply_to(message, msg, parse_mode="Markdown")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error aa gaya: `{e}`", parse_mode="Markdown")
 
 @bot.message_handler(commands=['leave'])
 def leave_kingdom_cmd(message):
-    uid = message.from_user.id
-    conn = sqlite3.connect('outlaw_realm.db')
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
-    user_res = cursor.fetchone()
-    
-    if not user_res or not user_res[0]:
-        conn.close()
-        bot.reply_to(message, "⚠️ Aap abhi kisi Kingdom ke member nahi hain!")
-        return
+    try:
+        uid = message.from_user.id
+        conn = sqlite3.connect('outlaw_realm.db')
+        cursor = conn.cursor()
         
-    k_id = user_res[0]
-    cursor.execute("SELECT owner_id FROM kingdoms WHERE kingdom_id = ?", (k_id,))
-    k_info = cursor.fetchone()
-    
-    if k_info and str(k_info[0]) == str(uid):
-        conn.close()
-        bot.reply_to(message, "❌ Aap King hain! Pehle `/transfer <user_id>` se crown transfer karein.")
-        return
+        cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
+        user_res = cursor.fetchone()
         
-    conn.close()
-    
-    markup = InlineKeyboardMarkup()
-    markup.add(
-        InlineKeyboardButton("✅ Haan, Chhodo", callback_data="confirm_leave"),
-        InlineKeyboardButton("❌ Nahi", callback_data="cancel_leave")
-    )
-    bot.reply_to(message, "⚠️ **WARNING:** Kya tum sach mein Kingdom chhodna chahte ho? Tumhara royal pad aur sabhi visheshadhikar chale jayenge!", reply_markup=markup, parse_mode="Markdown")
+        if not user_res or not user_res[0]:
+            conn.close()
+            bot.reply_to(message, "⚠️ Aap abhi kisi Kingdom ke member nahi hain!")
+            return
+            
+        k_id = user_res[0]
+        cursor.execute("SELECT owner_id FROM kingdoms WHERE kingdom_id = ?", (k_id,))
+        k_info = cursor.fetchone()
+        
+        if k_info and str(k_info[0]) == str(uid):
+            conn.close()
+            bot.reply_to(message, "❌ Aap King hain! Pehle `/transfer <user_id>` se crown transfer karein.")
+            return
+            
+        conn.close()
+        
+        markup = InlineKeyboardMarkup()
+        markup.add(
+            InlineKeyboardButton("✅ Haan, Chhodo", callback_data="confirm_leave"),
+            InlineKeyboardButton("❌ Nahi", callback_data="cancel_leave")
+        )
+        bot.reply_to(message, "⚠️ **WARNING:** Kya tum sach mein Kingdom chhodna chahte ho? Tumhara royal pad aur sabhi visheshadhikar chale jayenge!", reply_markup=markup, parse_mode="Markdown")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error aa gaya: `{e}`", parse_mode="Markdown")
 
 @bot.callback_query_handler(func=lambda call: call.data in ["confirm_leave", "cancel_leave"])
 def leave_callback(call):
-    uid = call.from_user.id
-    if call.data == "cancel_leave":
-        bot.answer_callback_query(call.id, "Action cancelled!")
+    try:
+        uid = call.from_user.id
+        if call.data == "cancel_leave":
+            bot.answer_callback_query(call.id, "Action cancelled!")
+            try:
+                bot.edit_message_text("❌ Kingdom chhodne ka faisla radd kar diya gaya hai.", call.message.chat.id, call.message.message_id)
+            except:
+                pass
+            return
+            
+        conn = sqlite3.connect('outlaw_realm.db')
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET kingdom_id = NULL, title = 'Member', contribution = 0 WHERE user_id = ?", (uid,))
+        conn.commit()
+        conn.close()
+        
+        bot.answer_callback_query(call.id, "Left kingdom successfully!")
         try:
-            bot.edit_message_text("❌ Kingdom chhodne ka faisla radd kar diya gaya hai.", call.message.chat.id, call.message.message_id)
+            bot.edit_message_text("✅ Aapne successfully Kingdom chhod diya hai! Ab aap independent outlaw ban chuke hain.", call.message.chat.id, call.message.message_id)
         except:
             pass
-        return
-        
-    conn = sqlite3.connect('outlaw_realm.db')
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET kingdom_id = NULL, title = 'Member', contribution = 0 WHERE user_id = ?", (uid,))
-    conn.commit()
-    conn.close()
-    
-    bot.answer_callback_query(call.id, "Left kingdom successfully!")
-    try:
-        bot.edit_message_text("✅ Aapne successfully Kingdom chhod diya hai! Ab aap independent outlaw ban chuke hain.", call.message.chat.id, call.message.message_id)
-    except:
+    except Exception as e:
         pass
 
 @bot.message_handler(commands=['transfer'])
 def transfer_kingdom_cmd(message):
-    uid = message.from_user.id
-    parts = message.text.split()
-    
-    if len(parts) < 2:
-        bot.reply_to(message, "⚠️ Sahi tarika: `/transfer <user_id>` likhein.", parse_mode="Markdown")
-        return
-        
     try:
-        target_id = int(parts[1])
-    except ValueError:
-        bot.reply_to(message, "❌ Invalid User ID!")
-        return
+        uid = message.from_user.id
+        parts = message.text.split()
         
-    conn = sqlite3.connect('outlaw_realm.db')
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
-    u_res = cursor.fetchone()
-    if not u_res or not u_res[0]:
+        if len(parts) < 2:
+            bot.reply_to(message, "⚠️ Sahi tarika: `/transfer <user_id>` likhein.", parse_mode="Markdown")
+            return
+            
+        try:
+            target_id = int(parts[1])
+        except ValueError:
+            bot.reply_to(message, "❌ Invalid User ID!")
+            return
+            
+        conn = sqlite3.connect('outlaw_realm.db')
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
+        u_res = cursor.fetchone()
+        if not u_res or not u_res[0]:
+            conn.close()
+            bot.reply_to(message, "❌ Aap kisi Kingdom ke member nahi hain!")
+            return
+            
+        k_id = u_res[0]
+        cursor.execute("SELECT owner_id FROM kingdoms WHERE kingdom_id = ?", (k_id,))
+        k_info = cursor.fetchone()
+        
+        if not k_info or str(k_info[0]) != str(uid):
+            conn.close()
+            bot.reply_to(message, "❌ Sirf Kingdom ka King hi crown transfer kar sakta hai!")
+            return
+            
+        cursor.execute("UPDATE kingdoms SET owner_id = ? WHERE kingdom_id = ?", (target_id, k_id))
+        cursor.execute("UPDATE users SET title = 'Member' WHERE user_id = ?", (uid,))
+        cursor.execute("UPDATE users SET title = 'King' WHERE user_id = ?", (target_id,))
+        
+        conn.commit()
         conn.close()
-        bot.reply_to(message, "❌ Aap kisi Kingdom ke member nahi hain!")
-        return
-        
-    k_id = u_res[0]
-    cursor.execute("SELECT owner_id FROM kingdoms WHERE kingdom_id = ?", (k_id,))
-    k_info = cursor.fetchone()
-    
-    if not k_info or str(k_info[0]) != str(uid):
-        conn.close()
-        bot.reply_to(message, "❌ Sirf Kingdom ka King hi crown transfer kar sakta hai!")
-        return
-        
-    cursor.execute("UPDATE kingdoms SET owner_id = ? WHERE kingdom_id = ?", (target_id, k_id))
-    cursor.execute("UPDATE users SET title = 'Member' WHERE user_id = ?", (uid,))
-    cursor.execute("UPDATE users SET title = 'King' WHERE user_id = ?", (target_id,))
-    
-    conn.commit()
-    conn.close()
-    bot.reply_to(message, f"👑 Crown successfully transfer ho gaya! Naye King ki User ID `{target_id}` hai.", parse_mode="Markdown")
+        bot.reply_to(message, f"👑 Crown successfully transfer ho gaya! Naye King ki User ID `{target_id}` hai.", parse_mode="Markdown")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error aa gaya: `{e}`", parse_mode="Markdown")
 
 def set_title_handler(message, title_name):
-    uid = message.from_user.id
-    parts = message.text.split()
-    
-    if len(parts) < 2:
-        bot.reply_to(message, f"⚠️ Sahi tarika: `/{title_name.lower()} <user_id>` likhein.", parse_mode="Markdown")
-        return
-        
     try:
-        target_id = int(parts[1])
-    except ValueError:
-        bot.reply_to(message, "❌ Invalid User ID!")
-        return
+        uid = message.from_user.id
+        parts = message.text.split()
         
-    conn = sqlite3.connect('outlaw_realm.db')
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
-    u_res = cursor.fetchone()
-    if not u_res or not u_res[0]:
+        if len(parts) < 2:
+            bot.reply_to(message, f"⚠️ Sahi tarika: `/{title_name.lower()} <user_id>` likhein.", parse_mode="Markdown")
+            return
+            
+        try:
+            target_id = int(parts[1])
+        except ValueError:
+            bot.reply_to(message, "❌ Invalid User ID!")
+            return
+            
+        conn = sqlite3.connect('outlaw_realm.db')
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
+        u_res = cursor.fetchone()
+        if not u_res or not u_res[0]:
+            conn.close()
+            bot.reply_to(message, "❌ Aap khud kisi kingdom me nahi hain!")
+            return
+            
+        k_id = u_res[0]
+        cursor.execute("SELECT owner_id FROM kingdoms WHERE kingdom_id = ?", (k_id,))
+        k_info = cursor.fetchone()
+        
+        if not k_info or str(k_info[0]) != str(uid):
+            conn.close()
+            bot.reply_to(message, "❌ Sirf Kingdom ka King hi kisi ko title de sakta hai!")
+            return
+            
+        cursor.execute("UPDATE users SET title = ? WHERE user_id = ? AND kingdom_id = ?", (title_name, target_id, k_id))
+        conn.commit()
         conn.close()
-        bot.reply_to(message, "❌ Aap khud kisi kingdom me nahi hain!")
-        return
         
-    k_id = u_res[0]
-    cursor.execute("SELECT owner_id FROM kingdoms WHERE kingdom_id = ?", (k_id,))
-    k_info = cursor.fetchone()
-    
-    if not k_info or str(k_info[0]) != str(uid):
-        conn.close()
-        bot.reply_to(message, "❌ Sirf Kingdom ka King hi kisi ko title de sakta hai!")
-        return
-        
-    cursor.execute("UPDATE users SET title = ? WHERE user_id = ? AND kingdom_id = ?", (title_name, target_id, k_id))
-    conn.commit()
-    conn.close()
-    
-    bot.reply_to(message, f"✅ Success! User ID `{target_id}` ko ab **{title_name}** bana diya gaya hai!", parse_mode="Markdown")
+        bot.reply_to(message, f"✅ Success! User ID `{target_id}` ko ab **{title_name}** bana diya gaya hai!", parse_mode="Markdown")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error aa gaya: `{e}`", parse_mode="Markdown")
 
 @bot.message_handler(commands=['duke'])
 def duke_cmd(message):
@@ -1283,4 +1112,4 @@ def marcus_cmd(message):
     set_title_handler(message, 'Marcus')
 
 bot.infinity_polling()
-    
+            
