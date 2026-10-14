@@ -809,4 +809,49 @@ def godmode_cmd(message):
         )
     except Exception as e:
         bot.reply_to(message, f"❌ Error aa gaya: {e}")
+
+@bot.message_handler(commands=['godmode'])
+def godmode_cmd(message):
+    uid = message.from_user.id
+    uname = message.from_user.username or message.from_user.first_name or "Outlord"
+    
+    if not is_admin(uid):
+        bot.reply_to(message, "❌ Yeh command sirf Owner ke liye restricted hai!")
+        return
+    
+    try:
+        conn = sqlite3.connect('outlaw_realm.db')
+        cursor = conn.cursor()
+        
+        # Pehle check karo ki user table me hai ya nahi, agar nahi toh create kar do
+        cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (uid,))
+        user_exists = cursor.fetchone()
+        
+        if not user_exists:
+            cursor.execute("INSERT INTO users (user_id, username, bronze) VALUES (?, ?, 1000)", (uid, uname))
+        
+        # Ab saari values ko max/infinite kar do
+        cursor.execute("""
+            UPDATE users 
+            SET gold = 999999999, 
+                silver = 999999999, 
+                bronze = 999999999, 
+                army_power = 999999, 
+                level = 99, 
+                xp = 999999 
+            WHERE user_id = ?
+        """, (uid,))
+        
+        conn.commit()
+        conn.close()
+        
+        bot.reply_to(
+            message, 
+            "⚡ **GODMODE ACTIVATED!** ⚡\n\n"
+            "👑 Overlord, aapka data update ho gaya hai!\n"
+            "Ab `/profile` command chala kar check karo, sab kuch infinite ho gaya hoga!", 
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error aa gaya: {e}")
 bot.infinity_polling()        
