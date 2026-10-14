@@ -919,31 +919,6 @@ def set_title_handler(message, title_name):
     
     bot.reply_to(message, f"✅ Success! User ID `{target_id}` ko ab **{title_name}** bana diya gaya hai!", parse_mode="Markdown")
 
-@bot.message_handler(commands=['duke'])
-def duke_cmd(message):
-    set_title_handler(message, 'Duke')
-
-@bot.message_handler(commands=['viscount'])
-def viscount_cmd(message):
-    set_title_handler(message, 'Viscount')
-
-@bot.message_handler(commands=['baron'])
-def baron_cmd(message):
-    set_title_handler(message, 'Baron')
-
-@bot.message_handler(commands=['marcus'])
-def marcus_cmd(message):
-    set_title_handler(message, 'Marcus')
-# Contribution column add karne ke liye safety check
-try:
-    conn = sqlite3.connect('outlaw_realm.db')
-    cursor = conn.cursor()
-    cursor.execute("ALTER TABLE users ADD COLUMN contribution INTEGER DEFAULT 0")
-    conn.commit()
-    conn.close()
-except:
-    pass
-
 @bot.message_handler(commands=['help', 'guide'])
 def help_cmd(message):
     bot.reply_to(message, 
@@ -1036,7 +1011,7 @@ def deposit_cmd(message):
     contrib_val = amt * 10000 if ctype == 'gold' else (amt * 100 if ctype == 'silver' else amt)
     
     cursor.execute(f"UPDATE users SET {ctype} = {ctype} - ?, contribution = contribution + ? WHERE user_id = ?", (amt, contrib_val, uid))
-    cursor.execute(f"UPDATE kingdoms SET treasury_{ctype} = treasury_{ctype} + ? WHERE kingdom_id = ? OR rowid = ?", (amt, k_id, k_id))
+    cursor.execute(f"UPDATE kingdoms SET treasury_{ctype} = treasury_{ctype} + ? WHERE kingdom_id = ?", (amt, k_id))
     
     conn.commit()
     conn.close()
@@ -1095,7 +1070,7 @@ def kingdom_handler(message):
     
     k_id = user_kingdom_id
     
-    cursor.execute("SELECT name, owner_id, treasury_gold, treasury_silver, treasury_bronze FROM kingdoms WHERE kingdom_id = ? OR rowid = ?", (k_id, k_id))
+    cursor.execute("SELECT name, owner_id, treasury_gold, treasury_silver, treasury_bronze FROM kingdoms WHERE kingdom_id = ?", (k_id,))
     k_data = cursor.fetchone()
     
     if not k_data:
@@ -1170,7 +1145,7 @@ def leave_kingdom_cmd(message):
         return
         
     k_id = user_res[0]
-    cursor.execute("SELECT owner_id FROM kingdoms WHERE kingdom_id = ? OR rowid = ?", (k_id, k_id))
+    cursor.execute("SELECT owner_id FROM kingdoms WHERE kingdom_id = ?", (k_id,))
     k_info = cursor.fetchone()
     
     if k_info and str(k_info[0]) == str(uid):
@@ -1236,7 +1211,7 @@ def transfer_kingdom_cmd(message):
         return
         
     k_id = u_res[0]
-    cursor.execute("SELECT owner_id FROM kingdoms WHERE kingdom_id = ? OR rowid = ?", (k_id, k_id))
+    cursor.execute("SELECT owner_id FROM kingdoms WHERE kingdom_id = ?", (k_id,))
     k_info = cursor.fetchone()
     
     if not k_info or str(k_info[0]) != str(uid):
@@ -1244,7 +1219,7 @@ def transfer_kingdom_cmd(message):
         bot.reply_to(message, "❌ Sirf Kingdom ka King hi crown transfer kar sakta hai!")
         return
         
-    cursor.execute("UPDATE kingdoms SET owner_id = ? WHERE kingdom_id = ? OR rowid = ?", (target_id, k_id, k_id))
+    cursor.execute("UPDATE kingdoms SET owner_id = ? WHERE kingdom_id = ?", (target_id, k_id))
     cursor.execute("UPDATE users SET title = 'Member' WHERE user_id = ?", (uid,))
     cursor.execute("UPDATE users SET title = 'King' WHERE user_id = ?", (target_id,))
     
@@ -1277,7 +1252,7 @@ def set_title_handler(message, title_name):
         return
         
     k_id = u_res[0]
-    cursor.execute("SELECT owner_id FROM kingdoms WHERE kingdom_id = ? OR rowid = ?", (k_id, k_id))
+    cursor.execute("SELECT owner_id FROM kingdoms WHERE kingdom_id = ?", (k_id,))
     k_info = cursor.fetchone()
     
     if not k_info or str(k_info[0]) != str(uid):
@@ -1308,5 +1283,4 @@ def marcus_cmd(message):
     set_title_handler(message, 'Marcus')
 
 bot.infinity_polling()
-
-
+    
