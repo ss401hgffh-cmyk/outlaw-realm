@@ -436,7 +436,8 @@ def kingdom_handler(message):
     cursor = conn.cursor()
     if len(parts) >= 3 and parts[1].lower() == 'create':
         cursor.execute("SELECT kingdom_id FROM users WHERE user_id = %s", (uid,))
-        if cursor.fetchone() and cursor.fetchone()[0]:
+        res_chk = cursor.fetchone()
+        if res_chk and res_chk[0]:
             conn.close()
             bot.reply_to(message, "❌ Already in a kingdom!")
             return
@@ -473,5 +474,4 @@ def start_cmd(message):
     bot.reply_to(message, f"⚔️ WELCOME TO OUTLAW REALM ⚔️\nLevel: {u[2]} | Bronze: {u[6]:,}\nUse `/help` for commands.")
 
 bot.infinity_polling()
-        
-                   
+               
