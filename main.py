@@ -62,7 +62,8 @@ def auto_collect_job():
     while True:
         try:
             time.sleep(300)
-            conn = sqlite3.connect('outlaw_realm.db')
+            conn = get_db_connection()
+            
             cursor = conn.cursor()
             cursor.execute("UPDATE users SET bronze = bronze + (level * 100)")
             cursor.execute("SELECT kingdom_id FROM kingdoms")
