@@ -1,5 +1,26 @@
-import telebot, sqlite3, random, datetime, threading, time
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+import os
+import sqlite3
+import psycopg2
+from urllib.parse import urlparse
+
+# Heroku Postgres URL check karega, agar nahi mila toh local SQLite file use karega
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+def get_db_connection():
+    if DATABASE_URL:
+        # Heroku Postgres connection
+        url = urlparse(DATABASE_URL)
+        return psycopg2.connect(
+            database=url.path[1:],
+            user=url.username,
+            password=url.password,
+            host=url.hostname,
+            port=url.port
+        )
+    else:
+        # Local SQLite connection (jab tum apne computer par test karo)
+        return sqlite3.connect('outlaw_realm.db')
+        
 
 TOKEN = "8882186957:AAGKs9WyX9lQWU1GMHjflHc11EF3xzuUeGc"
 bot = telebot.TeleBot(TOKEN)
@@ -7,7 +28,7 @@ bot = telebot.TeleBot(TOKEN)
 OWNER_IDS = [6047382490, 6652618822]
 LOG_GROUP_ID = -1004297857148
 
-conn = sqlite3.connect('outlaw_realm.db')
+conn = get_db_connection()
 cursor = conn.cursor()
 
 cursor.execute("CREATE TABLE IF NOT EXISTS bot_admins (user_id INTEGER PRIMARY KEY)")
@@ -30,7 +51,7 @@ conn.close()
 def is_admin(user_id):
     if user_id in OWNER_IDS:
         return True
-    conn = sqlite3.connect('outlaw_realm.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT user_id FROM bot_admins WHERE user_id = ?", (user_id,))
     res = cursor.fetchone()
@@ -57,7 +78,7 @@ def auto_collect_job():
 threading.Thread(target=auto_collect_job, daemon=True).start()
 
 def get_or_create_user(user_id, username):
-    conn = sqlite3.connect('outlaw_realm.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
     user = cursor.fetchone()
@@ -78,7 +99,7 @@ def status_dashboard_cmd(message):
         bot.reply_to(message, "❌ Yeh status dashboard sirf designated Log Group ya Bot Admins ke liye restricted hai!")
         return
 
-    conn = sqlite3.connect('outlaw_realm.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM users")
     u_cnt = cursor.fetchone()[0]
@@ -110,7 +131,7 @@ def add_admin_cmd(message):
     target_id = message.reply_to_message.from_user.id
     target_name = message.reply_to_message.from_user.username or message.reply_to_message.from_user.first_name
 
-    conn = sqlite3.connect('outlaw_realm.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("INSERT OR IGNORE INTO bot_admins (user_id) VALUES (?)", (target_id,))
     conn.commit()
@@ -135,7 +156,7 @@ def convert_cmd(message):
         bot.reply_to(message, "❌ Amount positive hona chahiye!")
         return
 
-    conn = sqlite3.connect('outlaw_realm.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
 
     if from_c == 'silver' and to_c == 'bronze':
@@ -182,7 +203,7 @@ def duel_cmd(message):
     p1_pwr = (p1[9] or 0) + random.randint(10, 100)
     p2_pwr = (p2[9] or 0) + random.randint(10, 100)
 
-    conn = sqlite3.connect('outlaw_realm.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
 
     if p1_pwr >= p2_pwr:
@@ -224,7 +245,7 @@ def deposit_cmd(message):
         bot.reply_to(message, f"❌ Insufficient `{ctype}` balance!")
         return
 
-    conn = sqlite3.connect('outlaw_realm.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(f"UPDATE users SET {ctype} = {ctype} - ? WHERE user_id = ?", (amt, uid))
     cursor.execute(f"UPDATE kingdoms SET {col} = {col} + ? WHERE kingdom_id = ?", (amt, kid))
@@ -238,7 +259,7 @@ def rank_cmd(message):
     target_user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
     uid, uname = target_user.id, target_user.username or target_user.first_name
 
-    conn = sqlite3.connect('outlaw_realm.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT user_id, username, bounty_points, army_power, kingdom_id FROM users")
     users = cursor.fetchall()
@@ -303,7 +324,7 @@ def territory_current_cmd(message):
         return
 
     chat_id = message.chat.id
-    conn = sqlite3.connect('outlaw_realm.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute("SELECT kingdom_id, territory_tier, territory_level FROM territories WHERE chat_id = ?", (chat_id,))
@@ -338,7 +359,7 @@ def territory_current_cmd(message):
 
 @bot.message_handler(func=lambda m: m.text and m.text.split()[0].lower() in ['/territories', '/allterritories', '/states'])
 def all_territories_cmd(message):
-    conn = sqlite3.connect('outlaw_realm.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT k.name, COUNT(t.chat_id) FROM kingdoms k LEFT JOIN territories t ON k.kingdom_id = t.kingdom_id GROUP BY k.kingdom_id")
     rows = cursor.fetchall()
@@ -367,7 +388,7 @@ def war_cmd(message):
         bot.reply_to(message, "❌ War chhedne ke liye Kingdom hona zaroori hai!")
         return
 
-    conn = sqlite3.connect('outlaw_realm.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute("SELECT kingdom_id FROM territories WHERE chat_id = ?", (chat_id,))
@@ -432,7 +453,7 @@ def claim_territory_cmd(message):
         bot.reply_to(message, "❌ Pehle kingdom banao ya join karo: `/kingdom create <Name>`", parse_mode="Markdown")
         return
 
-    conn = sqlite3.connect('outlaw_realm.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute("SELECT kingdom_id, territory_tier, territory_level FROM territories WHERE chat_id = ?", (chat_id,))
@@ -525,7 +546,7 @@ def give_money_cmd(message):
         bot.reply_to(message, f"❌ Inefficient Balance! Required: `{amount:,}` {curr_type.capitalize()}")
         return
 
-    conn = sqlite3.connect('outlaw_realm.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(f"UPDATE users SET {curr_type} = {curr_type} - ? WHERE user_id = ?", (amount, message.from_user.id))
     cursor.execute(f"UPDATE users SET {curr_type} = {curr_type} + ? WHERE user_id = ?", (amount, target_user.id))
@@ -581,7 +602,7 @@ def hire_main_router(message):
         bot.reply_to(message, f"❌ Insufficient Bronze! Need `{total_cost:,}`", parse_mode="Markdown")
         return
 
-    conn = sqlite3.connect('outlaw_realm.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE users SET bronze = bronze - ?, army_power = army_power + ? WHERE user_id = ?", (total_cost, total_pwr, uid))
     conn.commit()
@@ -609,7 +630,7 @@ def army_cmd(message):
 
 @bot.message_handler(func=lambda m: m.text and m.text.split()[0].lower() in ['/top', '/leaderboard'])
 def top_cmd(message):
-    conn = sqlite3.connect('outlaw_realm.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT user_id, username, bounty_points, army_power, kingdom_id FROM users")
     users = cursor.fetchall()
@@ -664,7 +685,7 @@ def profile_cmd(message):
     g_gold, g_silver, g_bronze = 0, 0, 0
 
     if kid:
-        conn = sqlite3.connect('outlaw_realm.db')
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT name, treasury_gold, treasury_silver, treasury_bronze FROM kingdoms WHERE kingdom_id = ?", (kid,))
         k_data = cursor.fetchone()
@@ -704,7 +725,7 @@ def help_cmd(message):
 
 # Database me title column add karne ke liye (agar pehle se nahi hai)
 try:
-    conn = sqlite3.connect('outlaw_realm.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("ALTER TABLE users ADD COLUMN title TEXT DEFAULT 'Member'")
     conn.commit()
@@ -723,7 +744,7 @@ def godmode_cmd(message):
     try:
         uid = message.from_user.id
         uname = message.from_user.username or message.from_user.first_name or "God"
-        conn = sqlite3.connect('outlaw_realm.db')
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT user_id FROM bot_admins WHERE user_id = ?", (uid,))
         is_admin = cursor.fetchone()
@@ -745,7 +766,7 @@ def profile_cmd(message):
     try:
         uid = message.from_user.id
         uname = message.from_user.username or message.from_user.first_name or "Outlaw"
-        conn = sqlite3.connect('outlaw_realm.db')
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT level, xp, gold, silver, bronze, kingdom_id, bounty_points, army_power, title FROM users WHERE user_id = ?", (uid,))
         u_res = cursor.fetchone()
@@ -815,7 +836,7 @@ def join_kingdom_cmd(message):
             bot.reply_to(message, "⚠️ Sahi tarika: `/join <Kingdom Name>`", parse_mode="Markdown")
             return
         kingdom_name = parts[1].strip()
-        conn = sqlite3.connect('outlaw_realm.db')
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
         user_res = cursor.fetchone()
@@ -850,7 +871,7 @@ def deposit_cmd(message):
         if amt <= 0 or ctype not in ['gold', 'silver', 'bronze']:
             bot.reply_to(message, "❌ Invalid amount ya currency!", parse_mode="Markdown")
             return
-        conn = sqlite3.connect('outlaw_realm.db')
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT kingdom_id, gold, silver, bronze FROM users WHERE user_id = ?", (uid,))
         u_res = cursor.fetchone()
@@ -878,7 +899,7 @@ def kingdom_handler(message):
         uid = message.from_user.id
         uname = message.from_user.username or message.from_user.first_name or "Outlord"
         parts = message.text.split(maxsplit=2)
-        conn = sqlite3.connect('outlaw_realm.db')
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT kingdom_id, title FROM users WHERE user_id = ?", (uid,))
         u_res = cursor.fetchone()
@@ -954,7 +975,7 @@ def kingdom_handler(message):
 def leave_kingdom_cmd(message):
     try:
         uid = message.from_user.id
-        conn = sqlite3.connect('outlaw_realm.db')
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
         user_res = cursor.fetchone()
@@ -984,7 +1005,7 @@ def leave_callback(call):
             bot.answer_callback_query(call.id, "Cancelled!")
             bot.edit_message_text("❌ Radd kar diya gaya hai.", call.message.chat.id, call.message.message_id)
             return
-        conn = sqlite3.connect('outlaw_realm.db')
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("UPDATE users SET kingdom_id = NULL, title = 'Member' WHERE user_id = ?", (uid,))
         conn.commit()
@@ -1003,7 +1024,7 @@ def transfer_kingdom_cmd(message):
             bot.reply_to(message, "⚠️ Sahi tarika: `/transfer <user_id>`", parse_mode="Markdown")
             return
         target_id = int(parts[1])
-        conn = sqlite3.connect('outlaw_realm.db')
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
         u_res = cursor.fetchone()
@@ -1037,7 +1058,7 @@ def promote_cmd(message):
             return
         target_id = int(parts[1])
         new_title = parts[2].strip()
-        conn = sqlite3.connect('outlaw_realm.db')
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
         u_res = cursor.fetchone()
@@ -1067,7 +1088,7 @@ def set_title_handler(message, title_name):
             bot.reply_to(message, f"⚠️ Sahi tarika: `/{title_name.lower()} <user_id>`", parse_mode="Markdown")
             return
         target_id = int(parts[1])
-        conn = sqlite3.connect('outlaw_realm.db')
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT kingdom_id FROM users WHERE user_id = ?", (uid,))
         u_res = cursor.fetchone()
