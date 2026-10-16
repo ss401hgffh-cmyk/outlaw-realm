@@ -7,12 +7,10 @@ import threading
 from urllib.parse import urlparse
 import random
 
-# Heroku Postgres URL check karega, agar nahi mila toh local SQLite file use karega
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_db_connection():
     if DATABASE_URL:
-        # Heroku Postgres connection
         url = urlparse(DATABASE_URL)
         return psycopg2.connect(
             database=url.path[1:],
@@ -22,9 +20,7 @@ def get_db_connection():
             port=url.port
         )
     else:
-        # Local SQLite connection (jab tum apne computer par test karo)
         return sqlite3.connect('outlaw_realm.db')
-        
 
 TOKEN = "8882186957:AAGKs9WyX9lQWU1GMHjflHc11EF3xzuUeGc"
 bot = telebot.TeleBot(TOKEN)
@@ -103,6 +99,7 @@ def esc(text):
     if not text:
         return ""
     return str(text).replace('_', '\\_').replace('*', '\\*').replace('`', '\\`').replace('[', '\\[')
+            
 @bot.message_handler(func=lambda m: m.text and m.text.split()[0].lower() in ['/status', '/botstatus', '.status'])
 def status_dashboard_cmd(message):
     if message.chat.id != LOG_GROUP_ID and not is_admin(message.from_user.id):
@@ -298,8 +295,7 @@ def army_cmd(message):
     u = get_or_create_user(uid, uname)
     army_val = u[9] if (len(u) > 9 and u[9] is not None) else 0
     bot.reply_to(message, f"🪖 **OUTLAW MILITARY FORCE** 🪖\n\nUser: @{uname}\nTotal Army Power: `{army_val:,}` PWR", parse_mode="Markdown")
-
-@bot.message_handler(func=lambda m: m.text and m.text.split()[0].lower() in ['/top', '/leaderboard'])
+    @bot.message_handler(func=lambda m: m.text and m.text.split()[0].lower() in ['/top', '/leaderboard'])
 def top_cmd(message):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -341,7 +337,9 @@ def top_cmd(message):
         msg += f"{rank}. {name_str}\n🏰 Kingdom: {p['k_name']}\n🌐 States: {p['t_count']} | ⚔️ PWR: {a_val}\n☠️ Bounty: 🥉 {b_val}\n━━━━━━━━━━━━━━━━━━━━━\n"
 
     conn.close()
-    bot.reply_to(message, msg)@bot.message_handler(func=lambda m: m.text and m.text.split()[0].lower() in ['/territory', '/state'])
+    bot.reply_to(message, msg)
+
+@bot.message_handler(func=lambda m: m.text and m.text.split()[0].lower() in ['/territory', '/state'])
 def territory_current_cmd(message):
     if message.chat.type in ['private']:
         bot.reply_to(message, "❌ Private chat me koi territory nahi hoti!")
@@ -643,8 +641,7 @@ def callback_shop_units(call):
     costs = {"Farmer": "10 Bronze = +1 PWR", "Blacksmith": "30 Bronze = +3 PWR", "Shopkeeper": "60 Bronze = +7 PWR", "Knight": "150 Bronze = +20 PWR", "Noble": "350 Bronze = +50 PWR", "Royal": "800 Bronze = +150 PWR", "Machinery": "2,000 Bronze = +500 PWR"}
     info = costs.get(unit, "10 Bronze = +1 PWR")
     bot.answer_callback_query(call.id, f"{unit} Info: {info}\nUse command: /hire {unit} <amount>", show_alert=True)
-
-@bot.message_handler(commands=['godmode'])
+    @bot.message_handler(commands=['godmode'])
 def godmode_cmd(message):
     try:
         uid = message.from_user.id
@@ -665,7 +662,8 @@ def godmode_cmd(message):
         bot.reply_to(message, "👑 **GODMODE ACTIVATED!** Wealth aur power unlimited ho chuki hai.", parse_mode="Markdown")
     except Exception as e:
         bot.reply_to(message, f"❌ Error: `{e}`", parse_mode="Markdown")
-        @bot.message_handler(commands=['profile'])
+
+@bot.message_handler(commands=['profile'])
 def profile_cmd(message):
     try:
         target_user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
@@ -1037,6 +1035,3 @@ def start_cmd(message):
     bot.reply_to(message, f"⚔️ WELCOME TO OUTLAW REALM ⚔️\n👤 Outlaw: @{uname}\n🎖️ Rank: Level {u[2]}\n🟡 Gold: {u[4]:,} | 🥈 Silver: {u[5]:,} | 🥉 Bronze: {u[6]:,}\n\n💡 Commands ke liye /help ya /story chalaein!")
 
 bot.infinity_polling()
-        
-            
-    
