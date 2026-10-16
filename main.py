@@ -1,7 +1,9 @@
+import telebot
 import os
 import sqlite3
 import psycopg2
 from urllib.parse import urlparse
+
 
 # Heroku Postgres URL check karega, agar nahi mila toh local SQLite file use karega
 DATABASE_URL = os.getenv("DATABASE_URL")
