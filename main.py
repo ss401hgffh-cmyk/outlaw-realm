@@ -35,7 +35,7 @@ cursor = conn.cursor()
 
 cursor.execute("CREATE TABLE IF NOT EXISTS bot_admins (user_id INTEGER PRIMARY KEY)")
 cursor.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, username TEXT, level INTEGER DEFAULT 1, xp INTEGER DEFAULT 0, gold INTEGER DEFAULT 0, silver INTEGER DEFAULT 0, bronze INTEGER DEFAULT 0, kingdom_id INTEGER, bounty_points INTEGER DEFAULT 0, army_power INTEGER DEFAULT 0)")
-cursor.execute("CREATE TABLE IF NOT EXISTS kingdoms (kingdom_id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, owner_id INTEGER, treasury_gold INTEGER DEFAULT 0, treasury_silver INTEGER DEFAULT 0, treasury_bronze INTEGER DEFAULT 0)")
+cursor.execute("CREATE TABLE IF NOT EXISTS kingdoms (kingdom_id SERIAL PRIMARY KEY, name TEXT, owner_id INTEGER, treasury_gold INTEGER DEFAULT 0, treasury_silver INTEGER DEFAULT 0, treasury_bronze INTEGER DEFAULT 0)")
 cursor.execute("CREATE TABLE IF NOT EXISTS territories (chat_id INTEGER PRIMARY KEY, kingdom_id INTEGER, territory_tier TEXT, territory_level INTEGER DEFAULT 1)")
 
 try: cursor.execute("ALTER TABLE users ADD COLUMN army_power INTEGER DEFAULT 0")
